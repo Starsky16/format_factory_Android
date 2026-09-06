@@ -137,13 +137,11 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
   /// 执行"脱壳"任务：调用原生解锁通道得到原始音频，再走统一的"输出到目标"流程。
   Future<void> _runUnlock(ConvertTask task) async {
     try {
-      final r = switch (task.unlockFormat) {
-        'ncm' => await UnlockApi.unlockNcm(
-            src: task.inputPath,
-            destDir: task.outputPath,
-          ),
-        _ => throw Exception('暂不支持的脱壳格式：${task.unlockFormat}'),
-      };
+      final r = await UnlockApi.unlockMusic(
+        format: task.unlockFormat!,
+        src: task.inputPath,
+        destDir: task.outputPath,
+      );
 
       // 把输出路径更新为解密后的真实文件，再与转换流程一致地收尾（含通知/历史/SAF复制）
       final done = task.copyWith(outputPath: r.path, progress: 1.0);
