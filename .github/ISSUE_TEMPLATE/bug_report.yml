@@ -1,0 +1,56 @@
+name: 问题报告 Bug report
+description: 反馈一个可以复现的问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量完整填写以下信息，便于复现。
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本 / 构建
+      description: 例如 v0.3.0 或设置页显示的信息
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: 设备 / 系统
+      options:
+        - Android 15+ (API 35/36)
+        - Android 13/14 (API 33/34)
+        - Android 11/12 (API 30-32)
+        - Android 9/10 (API 28/29)
+        - Android 7/8 (API 24-27)
+        - 模拟器
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题模块
+      options:
+        - 视频转换
+        - 音频转换
+        - 图片转换
+        - 音乐脱壳（.ncm/.qmc/.kgm）
+        - 任务 / 通知 / 历史
+        - 设置 / 文件浏览器
+        - 其它
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: 1. … 2. … 3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为与实际表现
+      description: 如有报错提示 / 截图请附上
+    validations:
+      required: true
