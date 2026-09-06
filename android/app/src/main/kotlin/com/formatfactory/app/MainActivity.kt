@@ -43,9 +43,15 @@ class MainActivity : FlutterFragmentActivity(), MethodChannel.MethodCallHandler 
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // 存储通道（选目录 / 复制到 SAF 目录）
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.formatfactory.app/storage",
+        ).setMethodCallHandler(this)
+        // 音乐脱壳通道（.ncm 等解密）—— 必须单独注册，否则 Dart 会报 MissingPluginException
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.formatfactory.app/unlock",
         ).setMethodCallHandler(this)
     }
 
