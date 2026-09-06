@@ -11,6 +11,7 @@ import '../services/ffmpeg_engine.dart';
 import '../services/foreground_notifier.dart';
 import '../services/history_store.dart';
 import '../services/storage_access.dart';
+import '../services/unlock_api.dart';
 import 'app_settings.dart';
 import 'history_notifier.dart';
 
@@ -82,6 +83,12 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
       await _notify(task, 0);
     }
 
+    // 脱壳任务：走原生解密通道，不进 FFmpeg
+    if (task.unlockFormat != null) {
+      await _runUnlock(task);
+      return;
+    }
+
     final command = FfmpegEngine.buildCommand(task);
     try {
       final session = await FFmpegKit.executeAsync(
@@ -123,7 +130,33 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
       );
       _activeSession = session;
     } catch (e) {
-      _finish(task, succeeded: false, message: '启动 FFmpeg 失败：$e');
+      _finish(task, message: '启动 FFmpeg 失败：$e');
+    }
+  }
+
+  /// 执行"脱壳"任务：调用原生解锁通道得到原始音频，再走统一的"输出到目标"流程。
+  Future<void> _runUnlock(ConvertTask task) async {
+    try {
+      final r = switch (task.unlockFormat) {
+        'ncm' => await UnlockApi.unlockNcm(
+            src: task.inputPath,
+            destDir: task.outputPath,
+          ),
+        _ => throw Exception('暂不支持的脱壳格式：${task.unlockFormat}'),
+      };
+
+      // 把输出路径更新为解密后的真实文件，再与转换流程一致地收尾（含通知/历史/SAF复制）
+      final done = task.copyWith(outputPath: r.path, progress: 1.0);
+      _patch(done.id, (_) => done);
+      if (_notifyEnabled) {
+        unawaited(_notify(done, 1.0));
+      }
+      await _saveToTarget(done);
+    } catch (e) {
+      _finish(
+        task,
+        message: '脱壳失败：${e.toString().replaceFirst('Exception: ', '')}',
+      );
     }
   }
 

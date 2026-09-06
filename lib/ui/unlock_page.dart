@@ -7,13 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 import '../services/file_store.dart';
 import '../services/manage_permission.dart';
-import '../services/storage_access.dart';
-import '../services/unlock_api.dart';
 import '../state/app_settings.dart';
+import '../state/task_queue.dart';
 import 'file_browser_page.dart';
 import 'picked_media.dart';
 
-/// "音乐脱壳"：把 .ncm（后续含 .qmc/.kgm）解成原始 flac/mp3，直接保存，不做转码。
+/// 音乐脱壳（选择页）。
+/// 勾选 .ncm 后点"加入任务队列"，真正的解密由 TaskQueue 在
+/// "转换任务"页执行并同步通知栏 —— 与普通转换完全一致。
 class UnlockPage extends ConsumerStatefulWidget {
   const UnlockPage({super.key});
 
@@ -21,22 +22,16 @@ class UnlockPage extends ConsumerStatefulWidget {
   ConsumerState<UnlockPage> createState() => _UnlockPageState();
 }
 
-enum _UnlockStatus { idle, working, done, failed }
-
-class _Entry {
-  _Entry({required this.path, required this.name, required this.size})
-      : status = _UnlockStatus.idle;
+class _Selected {
+  _Selected({required this.path, required this.name, required this.size});
   final String path;
   final String name;
   final int size;
-  _UnlockStatus status;
-  String? output;
-  String? error;
 }
 
 class _UnlockPageState extends ConsumerState<UnlockPage> {
-  final List<_Entry> _entries = [];
-  bool _busy = false;
+  final List<_Selected> _items = [];
+  bool _submitting = false;
 
   Future<void> _pick() async {
     // 与转换流程一致：按设置里的"读取文件方式"选择
@@ -82,18 +77,18 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
   }
 
   void _addPaths(List<String> paths) {
-    final fresh = <_Entry>[];
+    final fresh = <_Selected>[];
     for (final p in paths) {
-      if (_entries.any((e) => e.path == p)) continue;
+      if (_items.any((e) => e.path == p)) continue;
       final f = File(p);
-      fresh.add(_Entry(
+      fresh.add(_Selected(
         path: p,
         name: p.split(Platform.pathSeparator).last,
         size: _safeSize(f),
       ));
     }
     if (fresh.isEmpty) return;
-    setState(() => _entries.addAll(fresh));
+    setState(() => _items.addAll(fresh));
   }
 
   static int _safeSize(File f) {
@@ -104,57 +99,38 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     }
   }
 
-  Future<void> _unlockAll() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+  /// 把所有待脱壳文件作为一个任务加入统一队列，返回数量后让首页切到"任务"页。
+  Future<void> _enqueueAll() async {
+    if (_submitting || _items.isEmpty) return;
+    setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
-    var ok = 0;
-    var fail = 0;
-
+    final now = DateTime.now();
     final target = ref.read(appSettingsProvider).targetOf(MediaKind.audio);
-    // 输出目录：app 专属直接写；自定义 SAF 目录则先写内部工作区，成功后再复制
     final destDir = await FileStore.outputDir(MediaKind.audio, target);
 
-    for (final e in _entries) {
-      if (e.status == _UnlockStatus.done || e.status == _UnlockStatus.working) {
-        continue;
-      }
-      setState(() {
-        e.status = _UnlockStatus.working;
-        e.error = null;
-      });
-      try {
-        final r = await UnlockApi.unlockNcm(src: e.path, destDir: destDir.path);
-        e.output = r.path;
-        e.status = _UnlockStatus.done;
-        ok++;
-
-        // 若设置了"自定义 SAF 目录"，把结果复制过去
-        if (target != AppSettings.targetApp) {
-          final name = r.path.split(Platform.pathSeparator).last;
-          final uri = await StorageAccess.copyToTree(
-            treeUri: target,
-            fileName: name,
-            srcPath: r.path,
-          );
-          if (uri == null && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('已脱壳，但写入自定义目录失败（目录可能已失效）'),
-            ));
-          }
-        }
-      } catch (err) {
-        e.status = _UnlockStatus.failed;
-        e.error = err.toString().replaceFirst('Exception: ', '');
-        fail++;
-      }
-      if (mounted) setState(() {});
+    final tasks = <ConvertTask>[];
+    for (final e in _items) {
+      tasks.add(ConvertTask(
+        id: TaskQueue.newId(),
+        kind: MediaKind.audio,
+        inputPath: e.path,
+        inputName: e.name,
+        presetId: 'unlock_ncm', // 历史重试时据此识别为脱壳任务
+        presetName: 'NCM 脱壳',
+        settings: ConvertSettings.empty,
+        // 脱壳输出扩展名由原生端判断：这里传"输出目录"，成功后队列会更新为真实文件
+        outputPath: destDir.path,
+        createdAt: now,
+        unlockFormat: 'ncm',
+        copyTreeUri: target == AppSettings.targetApp ? null : target,
+      ));
     }
-
-    setState(() => _busy = false);
+    ref.read(taskQueueProvider.notifier).enqueue(tasks);
+    if (!mounted) return;
     messenger.showSnackBar(
-      SnackBar(content: Text(ok > 0 ? '脱壳完成：成功 $ok 个' : '全部失败($fail 个)，请查看列表原因')),
+      SnackBar(content: Text('已将 ${tasks.length} 个脱壳任务加入队列')),
     );
+    Navigator.of(context).pop(tasks.length);
   }
 
   @override
@@ -162,8 +138,8 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('音乐脱壳')),
-      body: _entries.isEmpty ? _emptyHint() : _entryList(scheme),
-      bottomNavigationBar: _entries.isEmpty
+      body: _items.isEmpty ? _emptyHint() : _itemList(scheme),
+      bottomNavigationBar: _items.isEmpty
           ? null
           : SafeArea(
               child: Padding(
@@ -171,16 +147,17 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
                 child: Row(
                   children: [
                     OutlinedButton.icon(
-                      onPressed: _busy ? null : _pick,
+                      onPressed: _submitting ? null : _pick,
                       icon: const Icon(Icons.add),
                       label: const Text('继续添加'),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: _busy ? null : _unlockAll,
-                        icon: const Icon(Icons.lock_open),
-                        label: Text(_busy ? '脱壳中…' : '开始脱壳 (${_entries.length})'),
+                        onPressed: _submitting ? null : _enqueueAll,
+                        icon: const Icon(Icons.playlist_add),
+                        label:
+                            Text('加入任务队列 (${_items.length})'),
                       ),
                     ),
                   ],
@@ -203,7 +180,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
             const Text('选择加密音乐文件'),
             const SizedBox(height: 8),
             Text(
-              '支持网易云 .ncm → 解出原始 flac/mp3\n（.qmc/.kgm 支持开发中）',
+              '支持网易云 .ncm → 还原为 flac/mp3\n（.qmc/.kgm 支持开发中）\n解密进度会显示在"任务"页',
               textAlign: TextAlign.center,
               style: TextStyle(color: Theme.of(context).colorScheme.outline),
             ),
@@ -219,52 +196,24 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     );
   }
 
-  Widget _entryList(ColorScheme scheme) {
+  Widget _itemList(ColorScheme scheme) {
     return ListView.builder(
-      itemCount: _entries.length,
+      itemCount: _items.length,
       itemBuilder: (context, i) {
-        final e = _entries[i];
-        final (icon, color, line) = switch (e.status) {
-          _UnlockStatus.idle => (
-              Icons.schedule,
-              scheme.outline,
-              formatBytes(e.size),
-            ),
-          _UnlockStatus.working => (
-              Icons.autorenew,
-              scheme.primary,
-              '正在脱壳…',
-            ),
-          _UnlockStatus.done => (
-              Icons.check_circle_outline,
-              const Color(0xFF2E7D32),
-              '完成：${e.output?.split(Platform.pathSeparator).last}',
-            ),
-          _UnlockStatus.failed => (
-              Icons.error_outline,
-              scheme.error,
-              '失败：${e.error ?? '未知错误'}',
-            ),
-        };
+        final e = _items[i];
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: color.withValues(alpha: 0.14),
-            child: Icon(icon, color: color, size: 20),
+            backgroundColor: scheme.secondaryContainer,
+            child: const Icon(Icons.lock_open_outlined, size: 20),
           ),
           title: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(line, maxLines: 2, overflow: TextOverflow.ellipsis),
-          trailing: _UnlockStatus.working == e.status
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() => _entries.removeAt(i)),
-                ),
+          subtitle: Text('将解密为原始格式 · ${formatBytes(e.size)}',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed:
+                _submitting ? null : () => setState(() => _items.removeAt(i)),
+          ),
         );
       },
     );
