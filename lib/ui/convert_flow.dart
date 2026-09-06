@@ -1,0 +1,221 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
+import '../models.dart';
+import '../services/media_probe.dart';
+import 'convert_settings.dart';
+import 'picked_media.dart';
+
+/// 各类别允许选择的扩展名（系统文件选择器用来过滤）。
+const List<String> kVideoExtensions = [
+  'mp4', 'mkv', 'mov', 'avi', 'wmv', 'flv', 'webm', 'm4v', '3gp',
+  'mpg', 'mpeg', 'mts', 'm2ts', 'ts', 'rm', 'rmvb', 'f4v', 'asf', 'vob',
+];
+const List<String> kAudioExtensions = [
+  'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus', 'wma', 'amr',
+  'ac3', 'ape', 'aiff', 'mka',
+];
+const List<String> kImageExtensions = [
+  'jpg', 'jpeg', 'png', 'bmp', 'webp', 'gif', 'tif', 'tiff', 'ico',
+  'heic', 'heif', 'jfif',
+];
+
+/// 转换流程第一步：选择并预览待转换文件。
+/// 用户点"选择格式并转换"后进入 ConvertSettingsPage；
+/// 那边入队成功会把本次添加的任务数量 pop 回来，本页再 pop 给首页。
+class ConvertFlow extends StatefulWidget {
+  const ConvertFlow({super.key, required this.kind});
+
+  final MediaKind kind;
+
+  @override
+  State<ConvertFlow> createState() => _ConvertFlowState();
+}
+
+class _ConvertFlowState extends State<ConvertFlow> {
+  final List<PickedMedia> _files = [];
+  bool _picking = false;
+
+  List<String> get _exts => switch (widget.kind) {
+        MediaKind.video => kVideoExtensions,
+        MediaKind.audio => kAudioExtensions,
+        MediaKind.image => kImageExtensions,
+      };
+
+  Future<void> _pickFiles() async {
+    setState(() => _picking = true);
+    try {
+      List<PlatformFile> files;
+      try {
+        files = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: _exts,
+        );
+      } catch (_) {
+        // 个别机型对自定义过滤支持不好，退化为"选任意文件"
+        files = await FilePicker.pickFiles();
+      }
+      if (files.isEmpty) return; // 用户取消
+
+      final fresh = <PickedMedia>[];
+      for (final f in files) {
+        if (f.path == null) continue; // Android 上都有本地缓存路径
+        if (_files.any((e) => e.path == f.path)) continue; // 去重
+        fresh.add(PickedMedia(
+          path: f.path!,
+          name: f.name,
+          sizeBytes: f.lengthSync() ?? 0,
+        ));
+      }
+      if (fresh.isEmpty) return;
+
+      setState(() => _files.addAll(fresh));
+      _probeAll(fresh);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('打开文件选择器失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  /// 逐个用 FFprobe 读信息（用于显示与算进度）。
+  Future<void> _probeAll(List<PickedMedia> list) async {
+    for (final m in list) {
+      final info = await MediaProbe.probe(m.path);
+      if (!mounted) return;
+      setState(() {
+        m.info = info;
+        m.probing = false;
+      });
+    }
+  }
+
+  void _remove(PickedMedia m) {
+    setState(() => _files.remove(m));
+  }
+
+  Future<void> _gotoSettings() async {
+    final added = await Navigator.of(context).push<int>(
+      MaterialPageRoute(
+        builder: (_) => ConvertSettingsPage(
+          kind: widget.kind,
+          files: List.of(_files),
+        ),
+      ),
+    );
+    if (added != null && added > 0 && mounted) {
+      // 入队成功，把数量带回首页，让它切换到"任务"标签
+      Navigator.of(context).pop(added);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.kind.label}转换')),
+      body: _files.isEmpty ? _emptyHint() : _fileList(scheme),
+      bottomNavigationBar: _files.isEmpty
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _picking ? null : _pickFiles,
+                      icon: const Icon(Icons.add),
+                      label: const Text('继续添加'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _gotoSettings,
+                        icon: const Icon(Icons.tune),
+                        label: Text('选择格式并转换 (${_files.length})'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _emptyHint() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.file_open_outlined,
+              size: 72,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            const Text('还没有选择文件', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(
+              '支持 ${_exts.join(' / ')} 等格式，可一次多选',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _picking ? null : _pickFiles,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('选择文件'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fileList(ColorScheme scheme) {
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 8),
+      itemCount: _files.length,
+      itemBuilder: (context, i) {
+        final m = _files[i];
+        final subtitle = StringBuffer();
+        subtitle
+          ..write(formatBytes(m.sizeBytes))
+          ..write(' · ');
+        if (m.probing) {
+          subtitle.write('读取信息中…');
+        } else if (m.info == null) {
+          subtitle.write('⚠ 无法识别，可能是不支持的格式');
+        } else {
+          subtitle.write(m.info!.line);
+        }
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: scheme.secondaryContainer,
+            child: Icon(_kindIcon(widget.kind), size: 20),
+          ),
+          title: Text(m.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(subtitle.toString(), maxLines: 2),
+          trailing: IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: '移除',
+            onPressed: () => _remove(m),
+          ),
+        );
+      },
+    );
+  }
+}
+
+IconData _kindIcon(MediaKind kind) => switch (kind) {
+      MediaKind.video => Icons.videocam_outlined,
+      MediaKind.audio => Icons.music_note,
+      MediaKind.image => Icons.image_outlined,
+    };
+

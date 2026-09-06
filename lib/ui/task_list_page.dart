@@ -1,0 +1,246 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../models.dart';
+import '../state/task_queue.dart';
+
+/// 任务列表页：显示全部任务、实时进度，支持取消/重试/分享。
+class TasksPage extends ConsumerWidget {
+  const TasksPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tasks = ref.watch(taskQueueProvider);
+    if (tasks.isEmpty) return const _EmptyTasks();
+
+    // 排序：未结束的在前，同样状态按创建时间倒序
+    final sorted = List<ConvertTask>.from(tasks)
+      ..sort((a, b) {
+        final af = a.status.isFinished ? 1 : 0;
+        final bf = b.status.isFinished ? 1 : 0;
+        if (af != bf) return af - bf;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 8),
+      itemCount: sorted.length,
+      itemBuilder: (context, i) => _TaskTile(task: sorted[i]),
+    );
+  }
+}
+
+class _EmptyTasks extends StatelessWidget {
+  const _EmptyTasks();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.playlist_add_check_circle_outlined,
+                size: 72,
+                color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 16),
+            const Text('暂无任务'),
+            const SizedBox(height: 8),
+            Text(
+              '到"转换"页选择文件并开始转换，任务会显示在这里',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskTile extends StatelessWidget {
+  const _TaskTile({required this.task});
+
+  final ConvertTask task;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final status = task.status;
+    final statusColor = switch (status) {
+      TaskStatus.queued => scheme.outline,
+      TaskStatus.running => scheme.primary,
+      TaskStatus.succeeded => const Color(0xFF2E7D32),
+      TaskStatus.failed => scheme.error,
+      TaskStatus.canceled => scheme.outline,
+    };
+
+    final actions = <Widget>[];
+    if (status == TaskStatus.running || status == TaskStatus.queued) {
+      actions.add(IconButton(
+        icon: const Icon(Icons.stop_circle_outlined),
+        tooltip: '取消',
+        color: scheme.error,
+        onPressed: () => _notifier(context).cancel(task.id),
+      ));
+    }
+    if (status == TaskStatus.failed || status == TaskStatus.canceled) {
+      actions.add(IconButton(
+        icon: const Icon(Icons.refresh),
+        tooltip: '重试',
+        onPressed: () => _notifier(context).retry(task.id),
+      ));
+    }
+    if (status == TaskStatus.succeeded) {
+      actions.add(IconButton(
+        icon: const Icon(Icons.share_outlined),
+        tooltip: '分享文件',
+        onPressed: () => _share(context),
+      ));
+    }
+    if (status.isFinished) {
+      actions.add(IconButton(
+        icon: const Icon(Icons.delete_outline),
+        tooltip: '删除记录',
+        onPressed: () => _notifier(context).remove(task.id),
+      ));
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Column(
+        children: [
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: statusColor.withValues(alpha: 0.14),
+              child:
+                  Icon(_statusIcon(status), color: statusColor, size: 20),
+            ),
+            title: Text(task.inputName,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 2),
+                Text(
+                  '${task.presetName} · ${task.settings.summary}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (status == TaskStatus.succeeded)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      task.outputPath,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: scheme.outline),
+                    ),
+                  ),
+              ],
+            ),
+            trailing: status.isFinished
+                ? null
+                : Text(status.label, style: TextStyle(color: statusColor)),
+            onTap: (status == TaskStatus.failed && task.error != null)
+                ? () => _showError(context)
+                : null,
+          ),
+          if (status == TaskStatus.running)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  LinearProgressIndicator(
+                    value: task.progress > 0 ? task.progress : null,
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    task.progress > 0
+                        ? '${(task.progress * 100).round()}%'
+                        : '准备中…',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            )
+          else if (status == TaskStatus.queued)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('等待前面的任务完成…',
+                    style: theme.textTheme.bodySmall),
+              ),
+            ),
+          if (actions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 4, bottom: 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(spacing: 0, children: actions),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _statusIcon(TaskStatus s) => switch (s) {
+        TaskStatus.queued => Icons.schedule,
+        TaskStatus.running => Icons.autorenew,
+        TaskStatus.succeeded => Icons.check_circle_outline,
+        TaskStatus.failed => Icons.error_outline,
+        TaskStatus.canceled => Icons.cancel_outlined,
+      };
+
+  TaskQueue _notifier(BuildContext context) => ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(taskQueueProvider.notifier);
+
+  void _showError(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('失败原因'),
+        content: SingleChildScrollView(
+          child: Text(task.error ?? '未知错误',
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace')),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _share(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!File(task.outputPath).existsSync()) {
+      messenger
+          .showSnackBar(const SnackBar(content: Text('文件不存在，可能已被删除')));
+      return;
+    }
+    try {
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(task.outputPath)]),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('分享失败：$e')));
+    }
+  }
+}
+

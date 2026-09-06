@@ -1,0 +1,164 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models.dart';
+import '../state/task_queue.dart';
+import 'convert_flow.dart';
+import 'task_list_page.dart';
+
+/// 应用外壳：底部两个标签页 —— 转换(首页) / 任务。
+/// 首页的入口会 push 出 ConvertFlow，转换入队后自动切到"任务"标签。
+class HomeShell extends ConsumerStatefulWidget {
+  const HomeShell({super.key});
+
+  @override
+  ConsumerState<HomeShell> createState() => _HomeShellState();
+}
+
+class _HomeShellState extends ConsumerState<HomeShell> {
+  int _index = 0;
+
+  Future<void> _openConvert(MediaKind kind) async {
+    final added = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => ConvertFlow(kind: kind)),
+    );
+    if (added == null || added <= 0 || !mounted) return;
+    setState(() => _index = 1);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已把 $added 个任务加入队列，正在后台转换')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = ref
+        .watch(taskQueueProvider)
+        .where((t) => !t.status.isFinished)
+        .length;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_index == 0 ? '格式工厂' : '转换任务'),
+        actions: _index == 1
+            ? [
+                TextButton.icon(
+                  onPressed: () =>
+                      ref.read(taskQueueProvider.notifier).clearFinished(),
+                  icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                  label: const Text('清空已完成'),
+                ),
+              ]
+            : null,
+      ),
+      body: IndexedStack(
+        index: _index,
+        children: [
+          _HomeView(onConvert: _openConvert),
+          const TasksPage(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: '转换',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: pending > 0,
+              label: Text('$pending'),
+              child: const Icon(Icons.task_alt_outlined),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: pending > 0,
+              label: Text('$pending'),
+              child: const Icon(Icons.task_alt),
+            ),
+            label: '任务',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 首页：三个媒体类别入口 + 简短说明。
+class _HomeView extends StatelessWidget {
+  const _HomeView({required this.onConvert});
+
+  final void Function(MediaKind kind) onConvert;
+
+  static const _colors = <Color>[
+    Color(0xFF3F51B5), // 视频 靛蓝
+    Color(0xFFE65100), // 音频 橙
+    Color(0xFF2E7D32), // 图片 绿
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('把媒体转换成你想要的格式',
+                    style: theme.textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Text(
+                  '视频 · 音频 · 图片 三类互转，支持批量与后台队列',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final kind in MediaKind.values)
+          Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            clipBehavior: Clip.antiAlias,
+            child: ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: CircleAvatar(
+                radius: 22,
+                backgroundColor:
+                    _colors[kind.index].withValues(alpha: 0.14),
+                child: Icon(
+                  switch (kind) {
+                    MediaKind.video => Icons.videocam_outlined,
+                    MediaKind.audio => Icons.music_note,
+                    MediaKind.image => Icons.image_outlined,
+                  },
+                  color: _colors[kind.index],
+                ),
+              ),
+              title: Text('${kind.label}转换',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(switch (kind) {
+                MediaKind.video => 'MP4 / MKV / AVI / WebM / GIF 等',
+                MediaKind.audio => 'MP3 / FLAC / WAV / AAC / OGG 等',
+                MediaKind.image => 'JPG / PNG / WebP / BMP / TIFF 等',
+              }),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => onConvert(kind),
+            ),
+          ),
+        Text(
+          '提示：批量任务会逐个串行转换，可随时取消。转码为 GPL 开源项目 FFmpeg 驱动。',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+      ],
+    );
+  }
+}
