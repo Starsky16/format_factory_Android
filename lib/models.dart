@@ -85,6 +85,7 @@ class ConvertTask {
     required this.settings,
     required this.outputPath,
     required this.createdAt,
+    this.unlockFormat,
     this.copyTreeUri,
     this.inputDurationSeconds,
     this.status = TaskStatus.queued,
@@ -94,6 +95,9 @@ class ConvertTask {
 
   final String id;
   final MediaKind kind;
+
+  /// 若非空 = "脱壳"任务（如 'ncm'），不走 FFmpeg 而是调用原生解密通道。
+  final String? unlockFormat;
   final String inputPath; // 源文件路径
   final String inputName; // 源文件名（展示用）
   final String presetId; // 目标格式 id（见 formats_data.dart）
@@ -121,6 +125,7 @@ class ConvertTask {
     double? progress,
     String? error,
     bool clearError = false,
+    String? outputPath,
   }) {
     return ConvertTask(
       id: id,
@@ -130,8 +135,9 @@ class ConvertTask {
       presetId: presetId,
       presetName: presetName,
       settings: settings,
-      outputPath: outputPath,
+      outputPath: outputPath ?? this.outputPath,
       createdAt: createdAt,
+      unlockFormat: unlockFormat,
       copyTreeUri: copyTreeUri,
       inputDurationSeconds: inputDurationSeconds,
       status: status ?? this.status,

@@ -33,6 +33,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
+  /// 音乐脱壳：加入任务队列后自动切到"任务"页查看进度。
+  Future<void> _openUnlock() async {
+    final added = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => const UnlockPage()),
+    );
+    if (added == null || added <= 0 || !mounted) return;
+    setState(() => _index = 1);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已把 $added 个脱壳任务加入队列')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pending = ref
@@ -71,7 +83,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       body: IndexedStack(
         index: _index,
         children: [
-          _HomeView(onConvert: _openConvert),
+          _HomeView(onConvert: _openConvert, onOpenUnlock: _openUnlock),
           const TasksPage(),
           const SettingsPage(),
           const HistoryPage(),
@@ -117,9 +129,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
 /// 首页：三个媒体类别入口 + 简短说明。
 class _HomeView extends StatelessWidget {
-  const _HomeView({required this.onConvert});
+  const _HomeView({required this.onConvert, required this.onOpenUnlock});
 
   final void Function(MediaKind kind) onConvert;
+  final VoidCallback onOpenUnlock;
 
   static const _colors = <Color>[
     Color(0xFF3F51B5), // 视频 靛蓝
@@ -203,9 +216,7 @@ class _HomeView extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w600)),
             subtitle: const Text('网易云 .ncm 等加密音乐还原为原始 flac/mp3（不转码）'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const UnlockPage()),
-            ),
+            onTap: onOpenUnlock,
           ),
         ),
       ],

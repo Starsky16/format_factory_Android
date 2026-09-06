@@ -155,6 +155,31 @@ class _HistoryTile extends ConsumerWidget {
             .showSnackBar(const SnackBar(content: Text('源文件已不存在，无法重试')));
         return;
       }
+      // 脱壳任务（presetId 形如 unlock_ncm）重试：输出目录 = 原输出文件所在目录
+      final isUnlock = entry.presetId.startsWith('unlock_');
+      if (isUnlock) {
+        final dest = File(entry.outputPath).parent;
+        if (!dest.existsSync()) {
+          messenger.showSnackBar(
+              const SnackBar(content: Text('原输出目录已不存在，无法重试')));
+          return;
+        }
+        final task = ConvertTask(
+          id: TaskQueue.newId(),
+          kind: entry.kind,
+          inputPath: entry.inputPath,
+          inputName: entry.inputName,
+          presetId: entry.presetId,
+          presetName: entry.presetName,
+          settings: entry.settings,
+          outputPath: dest.path,
+          createdAt: DateTime.now(),
+          unlockFormat: entry.presetId.substring('unlock_'.length),
+        );
+        ref.read(taskQueueProvider.notifier).enqueue([task]);
+        messenger.showSnackBar(const SnackBar(content: Text('已加入任务队列')));
+        return;
+      }
       final dot = entry.outputPath.lastIndexOf('.');
       final ext =
           dot >= 0 ? entry.outputPath.substring(dot + 1) : 'mp4';
