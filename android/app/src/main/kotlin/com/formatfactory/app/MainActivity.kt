@@ -10,6 +10,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
+import com.formatfactory.app.unlock.NcmUnlocker
 
 /// 原生存储通道，供 Dart 侧 StorageAccess 调用：
 ///  - pickOutputDir ：打开系统 SAF 目录选择器并持久化授权
@@ -80,6 +81,37 @@ class MainActivity : FlutterFragmentActivity(), MethodChannel.MethodCallHandler 
                 } catch (e: Exception) {
                     result.error("copy_failed", e.message, null)
                 }
+            }
+            // ===== 音乐脱壳（.ncm / .qmc / .kgm 等）=====
+            "unlockNcm" -> {
+                val src = call.argument<String>("src")
+                val destDir = call.argument<String>("destDir")
+                if (src == null || destDir == null) {
+                    result.error("bad_args", "缺少参数", null)
+                    return
+                }
+                // 解密是大文件 IO，放到后台线程，完成后切回主线程回调
+                Thread {
+                    try {
+                        val r = NcmUnlocker.unlock(File(src), File(destDir))
+                        runOnUiThread {
+                            result.success(
+                                mapOf(
+                                    "path" to r.outputPath,
+                                    "ext" to r.ext,
+                                ),
+                            )
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread {
+                            result.error(
+                                "unlock_failed",
+                                e.message ?: "解密失败",
+                                null,
+                            )
+                        }
+                    }
+                }.start()
             }
             else -> result.notImplemented()
         }

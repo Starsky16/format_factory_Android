@@ -54,4 +54,6 @@ flutter {
 dependencies {
     // SAF 文档操作（MainActivity 的存储通道使用）
     implementation("androidx.documentfile:documentfile:1.0.1")
+    // JVM 单元测试（用于解密算法本地验证）
+    testImplementation("junit:junit:4.13.2")
 }

@@ -8,6 +8,7 @@ import 'convert_flow.dart';
 import 'history_page.dart';
 import 'settings_page.dart';
 import 'task_list_page.dart';
+import 'unlock_page.dart';
 
 /// 应用外壳：底部两个标签页 —— 转换(首页) / 任务。
 /// 首页的入口会 push 出 ConvertFlow，转换入队后自动切到"任务"标签。
@@ -187,6 +188,25 @@ class _HomeView extends StatelessWidget {
           '提示：批量任务会逐个串行转换，可随时取消。转码为 GPL 开源项目 FFmpeg 驱动。',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: const CircleAvatar(
+              radius: 22,
+              backgroundColor: Color(0x33B8860B),
+              child: Icon(Icons.lock_open_outlined, color: Color(0xFF8D6E00)),
+            ),
+            title: const Text('音乐脱壳',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('网易云 .ncm 等加密音乐还原为原始 flac/mp3（不转码）'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const UnlockPage()),
+            ),
+          ),
         ),
       ],
     );
