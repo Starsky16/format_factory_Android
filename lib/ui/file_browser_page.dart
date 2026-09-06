@@ -17,19 +17,34 @@ class FileBrowserPage extends StatefulWidget {
 }
 
 class _FileBrowserPageState extends State<FileBrowserPage> {
+  /// 打开时直接进入主存储（照片/下载/Music 通常都在这里）
   Directory _current = Directory('/storage/emulated/0');
   final List<String> _stack = [];
   final Set<String> _selected = {};
 
-  bool get _isRoot => _stack.isEmpty;
+  bool get _atStorageRoot => _current.path == '/storage';
+  bool get _atPrimary => _current.path == '/storage/emulated/0';
 
+  /// 进入子目录（把当前目录压栈，便于返回）
   void _enter(Directory d) {
     _stack.add(_current.path);
     setState(() => _current = d);
   }
 
+  /// 一键返回主存储
+  void _jumpPrimary() {
+    _stack.clear();
+    setState(() => _current = Directory('/storage/emulated/0'));
+  }
+
+  /// 返回上级：主存储 → 分区选择；更深目录 → 上一级
   void _goUp() {
-    if (_isRoot) return;
+    if (_atStorageRoot) return;
+    if (_atPrimary) {
+      _stack.clear();
+      setState(() => _current = Directory('/storage'));
+      return;
+    }
     setState(() => _current = Directory(_stack.removeLast()));
   }
 
@@ -50,19 +65,26 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isRoot ? '选择文件' : _current.path.split('/').last),
-        leading: _isRoot
-            ? null
+        title: Text(
+          _atStorageRoot
+              ? '选择分区'
+              : _atPrimary
+                  ? '主存储 (emulated/0)'
+                  : _current.path.split('/').last,
+        ),
+        leading: _atStorageRoot
+            ? null // 分区选择页：返回键=退出浏览器
             : IconButton(icon: const Icon(Icons.arrow_upward), onPressed: _goUp),
         actions: [
-          if (!_isRoot)
-            TextButton(
-              onPressed: () => _enter(_current.parent),
-              child: const Text('返回上级目录'),
-            ),
+          if (_atStorageRoot)
+            TextButton(onPressed: _jumpPrimary, child: const Text('进入主存储'))
+          else if (_atPrimary)
+            TextButton(onPressed: _goUp, child: const Text('切换分区'))
+          else
+            TextButton(onPressed: _jumpPrimary, child: const Text('主存储')),
         ],
       ),
-      body: _isRoot
+      body: _atStorageRoot
           ? _rootView(theme)
           : FutureBuilder<List<FileSystemEntity>>(
               future: _listSafe(),
@@ -117,15 +139,23 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
       children: [
         Padding(
           padding: const EdgeInsets.all(12),
-          child: Text('选择分区/目录开始浏览（可多选文件）',
+          child: Text('快捷进入主存储，或选择其它分区（可多选文件）',
               style: theme.textTheme.bodySmall),
         ),
+        ListTile(
+          leading: const Icon(Icons.folder_special),
+          title: const Text('主存储 · /storage/emulated/0'),
+          subtitle: const Text('照片 / 下载 / Music 等默认目录',
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          onTap: () => _enter(Directory('/storage/emulated/0')),
+        ),
         for (final d in roots)
-          ListTile(
-            leading: const Icon(Icons.folder),
-            title: Text(d.path),
-            onTap: () => _enter(d),
-          ),
+          if (d.path != '/storage/emulated')
+            ListTile(
+              leading: const Icon(Icons.folder),
+              title: Text(d.path),
+              onTap: () => _enter(d),
+            ),
       ],
     );
   }
