@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../formats.dart';
@@ -37,10 +38,10 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
     _resetDefaults();
   }
 
-  /// 每个参数默认取第一个选项。
+  /// 每个参数取各自的初始值（下拉框取第一项，数字框取默认或留空）。
   void _resetDefaults() {
     _values = {
-      for (final f in _preset.fields) f.key: f.options.first,
+      for (final f in _preset.fields) f.key: f.initialValue,
     };
   }
 
@@ -56,11 +57,13 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
     setState(() => _submitting = true);
     final tasks = <ConvertTask>[];
     final now = DateTime.now();
+    final settings = ConvertSettings(Map.of(_values));
+    final outExt = _preset.outExt(settings);
     for (final f in widget.files) {
       final outPath = await FileStore.uniqueOutputPath(
         widget.kind,
         f.name,
-        _preset.extension,
+        outExt,
       );
       tasks.add(ConvertTask(
         id: TaskQueue.newId(),
@@ -69,7 +72,7 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
         inputName: f.name,
         presetId: _preset.id,
         presetName: _preset.name,
-        settings: ConvertSettings(Map.of(_values)),
+        settings: settings,
         outputPath: outPath,
         createdAt: now,
         inputDurationSeconds: f.info?.durationSeconds,
@@ -99,7 +102,7 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
           if (_preset.fields.isNotEmpty) ...[
             const SizedBox(height: 16),
             _sectionTitle('参数'),
-            ..._preset.fields.map(_fieldDropdown),
+            ..._preset.fields.map(_fieldEditor),
           ],
           const SizedBox(height: 16),
           _sectionTitle('待转换文件（${widget.files.length} 个）'),
@@ -154,25 +157,59 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
     );
   }
 
-  Widget _fieldDropdown(OptionField field) {
+  /// 按字段类型渲染：下拉框 / 数字输入框，并在下方显示用途说明。
+  Widget _fieldEditor(OptionField field) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-        child: DropdownButtonFormField<String>(
-          initialValue: _values[field.key],
-          decoration: InputDecoration(
-            labelText: field.label,
-            border: InputBorder.none,
-          ),
-          items: [
-            for (final opt in field.options)
-              DropdownMenuItem(value: opt, child: Text(opt)),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (field.type == FieldType.choice)
+              DropdownButtonFormField<String>(
+                initialValue: _values[field.key],
+                decoration: InputDecoration(
+                  labelText: field.label,
+                  border: InputBorder.none,
+                ),
+                items: [
+                  for (final opt in field.options)
+                    DropdownMenuItem(value: opt, child: Text(opt)),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() => _values = {..._values, field.key: v});
+                },
+              )
+            else
+              TextFormField(
+                // key 里带上预设与参数名，切换格式时强制重建、避免残留旧值
+                key: ValueKey('${_preset.id}-${field.key.name}'),
+                initialValue: _values[field.key],
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: field.label,
+                  suffixText: field.unit ?? '',
+                  hintText: '留空 = 自动',
+                  border: const UnderlineInputBorder(),
+                ),
+                onChanged: (v) =>
+                    setState(() => _values = {..._values, field.key: v.trim()}),
+              ),
+            if (field.help != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  field.help!,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                ),
+              ),
           ],
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _values = {..._values, field.key: v});
-          },
         ),
       ),
     );
@@ -190,7 +227,9 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
                 leading: const Icon(Icons.insert_drive_file_outlined),
                 title: Text(f.name,
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text('→ ${_preset.extension.toUpperCase()}'),
+                subtitle: Text(
+                  '→ ${_preset.outExt(ConvertSettings(Map.of(_values))).toUpperCase()}',
+                ),
               ),
           ],
         ),

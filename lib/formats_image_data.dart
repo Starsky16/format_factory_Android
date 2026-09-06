@@ -14,10 +14,9 @@ final List<FormatPreset> imagePresets = [
     description: '通用照片格式，体积小（有损压缩）',
     fields: const [fieldResolution, fieldImageQuality],
     buildArgs: (s) {
-      final q = imageQualityOf(s);
       final args = <String>['-frames:v', '1']; // 只要第一帧（GIF 输入时有用）
       appendScale(args, s);
-      args.addAll(['-c:v', 'mjpeg', '-q:v', '${q.jpegQ}']);
+      args.addAll(['-c:v', 'mjpeg', '-q:v', '${imageJpegQ(imageQualityOf(s))}']);
       return args;
     },
   ),
@@ -43,10 +42,9 @@ final List<FormatPreset> imagePresets = [
     description: '现代网页图片格式，体积小',
     fields: const [fieldResolution, fieldImageQuality],
     buildArgs: (s) {
-      final q = imageQualityOf(s);
       final args = <String>['-frames:v', '1'];
       appendScale(args, s);
-      args.addAll(['-c:v', 'libwebp', '-quality', '${q.webpQ}']);
+      args.addAll(['-c:v', 'libwebp', '-quality', '${imageQualityOf(s)}']);
       return args;
     },
   ),
@@ -93,5 +91,20 @@ final List<FormatPreset> imagePresets = [
       args.addAll(['-c:v', 'gif']);
       return args;
     },
+  ),
+  // 自定义：自由选择图片格式 + 尺寸 + 质量
+  FormatPreset(
+    id: 'img_custom',
+    kind: MediaKind.image,
+    name: '自定义',
+    extension: 'jpg',
+    description: '自由选择图片格式、尺寸与质量（JPG/PNG/WebP/BMP/TIFF/GIF）',
+    fields: const [
+      fieldContainerImage,
+      fieldResolution,
+      fieldImageQuality,
+    ],
+    buildArgs: customImageArgs,
+    extFn: imageContainerExt,
   ),
 ];

@@ -23,11 +23,16 @@ extension MediaKindLabel on MediaKind {
 /// 转换设置里可调的参数项（每种目标格式声明自己需要展示哪些项）。
 enum SettingKey {
   resolution, // 画面尺寸
-  videoQuality, // 视频质量档位（决定文件大小）
+  videoQuality, // 视频质量（CRF 数值）
+  videoBitrate, // 视频码率 kbps（留空=用 CRF）
+  frameRate, // 帧率 fps（留空=保持源）
+  videoEncoder, // 视频编码器（自定义用）
+  audioEncoder, // 音频编码器（自定义用）
+  container, // 封装格式/扩展名（自定义用）
   audioBitrate, // 音频码率
   sampleRate, // 采样率
   channels, // 声道数
-  imageQuality, // 图片质量
+  imageQuality, // 图片质量 1~100
 }
 
 /// 一次转换的全部用户设置：key -> 选中的选项文本。
@@ -42,9 +47,11 @@ class ConvertSettings {
   String of(SettingKey key) => values[key] ?? '';
 
   /// 简洁展示已选的关键参数（用于任务列表小字说明）。
+  /// 数值型字段留空表示"自动"，展示时跳过。
   String get summary {
+    final values = this.values.values.where((v) => v.trim().isNotEmpty);
     if (values.isEmpty) return '默认参数';
-    return values.values.join(' · ');
+    return values.join(' · ');
   }
 }
 
