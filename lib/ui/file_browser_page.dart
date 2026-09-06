@@ -107,6 +107,27 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
     return widget.extensions.contains(name.substring(dot + 1).toLowerCase());
   }
 
+  /// 全选当前可见的可转换文件（目录模式=当前目录文件；搜索模式=搜索结果文件）。
+  void _selectAllVisible() {
+    setState(() {
+      if (_searching) {
+        for (final h in _hits) {
+          if (!h.isDir) _selected.add(h.path);
+        }
+        return;
+      }
+      try {
+        for (final e in _current.listSync()) {
+          if (e is File && _match(e.path)) _selected.add(e.path);
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _clearSelection() {
+    setState(() => _selected.clear());
+  }
+
   void _toggle(String path) {
     setState(() {
       if (!_selected.remove(path)) _selected.add(path);
@@ -201,12 +222,30 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: FilledButton.icon(
-            onPressed: _selected.isEmpty
-                ? null
-                : () => Navigator.of(context).pop(_selected.toList()),
-            icon: const Icon(Icons.check),
-            label: Text('确定添加 (${_selected.length})'),
+          child: Row(
+            children: [
+              TextButton.icon(
+                onPressed:
+                    (_atStorageRoot && !_searching) ? null : _selectAllVisible,
+                icon: const Icon(Icons.select_all, size: 18),
+                label: const Text('全选'),
+              ),
+              TextButton.icon(
+                onPressed: _selected.isEmpty ? null : _clearSelection,
+                icon: const Icon(Icons.deselect, size: 18),
+                label: const Text('清除'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _selected.isEmpty
+                      ? null
+                      : () => Navigator.of(context).pop(_selected.toList()),
+                  icon: const Icon(Icons.check),
+                  label: Text('确定添加 (${_selected.length})'),
+                ),
+              ),
+            ],
           ),
         ),
       ),
