@@ -49,7 +49,18 @@ app.*.map.json
 
 # 构建日志
 build_log*.txt
+build_log.txt
 unit_test_log*.txt
+ut_*.txt
+# Android 侧本地调试日志
+android/ut_log.txt
+android/ut_k.txt
+android/unit_test_log.txt
+# 通用日志与 Gradle/Kotlin 缓存日志（任意层级）
+*.log
+logs/
+.gradle/
+.kotlin/
 
 
 # 参考源码本地克隆（体积大，仅开发参考不入库）
