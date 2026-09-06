@@ -1,0 +1,51 @@
+name: Build & Release APK
+
+# 手动触发，或推送到形如 v* 的标签时自动构建并发布 GitHub Release。
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build split APKs & create release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build release APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME · 格式工厂 Android" \
+            --notes "自动构建于 GitHub Actions，可用下方 APK 安装：arm64-v8a（主流手机）/ armeabi-v7a（32位老机）/ x86_64（模拟器）。" \
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            build/app/outputs/flutter-apk/app-x86_64-release.apk || \
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME · 格式工厂 Android" \
+              --notes "自动构建于 GitHub Actions，可用下方 APK 安装：arm64-v8a（主流手机）/ armeabi-v7a（32位老机）/ x86_64（模拟器）。"
+
+      - name: Upload artifacts (manual run / non-tag)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apks
+          path: build/app/outputs/flutter-apk/app-*-release.apk

@@ -1,5 +1,12 @@
 # 格式工厂 · Format Factory（Android）
 
+[![CI](https://github.com/Starsky16/format_factory_Android/actions/workflows/ci.yml/badge.svg)](https://github.com/Starsky16/format_factory_Android/actions/workflows/ci.yml)
+[![Build & Release](https://github.com/Starsky16/format_factory_Android/actions/workflows/release-apk.yml/badge.svg)](https://github.com/Starsky16/format_factory_Android/actions/workflows/release-apk.yml)
+[![Latest Release](https://img.shields.io/github/v/release/Starsky16/format_factory_Android?label=Download)](https://github.com/Starsky16/format_factory_Android/releases/latest)
+[![License](https://img.shields.io/github/license/Starsky16/format_factory_Android)](LICENSE)
+
+> 安装包请到 **GitHub Releases** 下载：https://github.com/Starsky16/format_factory_Android/releases/latest
+
 一个类似电脑端"格式工厂"的**手机版媒体格式转换工具**，支持**视频 / 音频 / 图片**三类互转、**批量**转换与后台任务队列。
 
 - 技术栈：Flutter 3.x + Material 3（Material You 风格）+ FFmpeg（`ffmpeg_kit_flutter_new`，FFmpeg v8）
