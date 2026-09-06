@@ -7,10 +7,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 import '../services/file_store.dart';
 import '../services/manage_permission.dart';
+import '../services/unlock_api.dart';
 import '../state/app_settings.dart';
 import '../state/task_queue.dart';
 import 'file_browser_page.dart';
 import 'picked_media.dart';
+
+/// 按源扩展名显示脱壳名称。
+String unlockLabelFor(String ext) => switch (ext) {
+      'ncm' => 'NCM 脱壳',
+      _ when kQmcExtensions.contains(ext) => 'QMC 脱壳',
+      'vpr' => 'VPR 脱壳',
+      _ when kKgmExtensions.contains(ext) => 'KGM 脱壳',
+      _ => '音乐脱壳',
+    };
 
 /// 音乐脱壳（选择页）。
 /// 勾选 .ncm 后点"加入任务队列"，真正的解密由 TaskQueue 在
@@ -43,7 +53,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['ncm'],
+        allowedExtensions: kAllUnlockExtensions,
       );
       if (files.isEmpty) return;
       _addPaths([for (final f in files) if (f.path != null) f.path!]);
@@ -69,7 +79,7 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
     if (!mounted) return;
     final picked = await Navigator.of(context).push<List<String>>(
       MaterialPageRoute(
-        builder: (_) => const FileBrowserPage(extensions: ['ncm']),
+        builder: (_) => FileBrowserPage(extensions: kAllUnlockExtensions),
       ),
     );
     if (picked == null || picked.isEmpty || !mounted) return;
@@ -110,18 +120,19 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
 
     final tasks = <ConvertTask>[];
     for (final e in _items) {
+      final ext = e.path.split('.').last.toLowerCase();
       tasks.add(ConvertTask(
         id: TaskQueue.newId(),
         kind: MediaKind.audio,
         inputPath: e.path,
         inputName: e.name,
-        presetId: 'unlock_ncm', // 历史重试时据此识别为脱壳任务
-        presetName: 'NCM 脱壳',
+        presetId: 'unlock_$ext', // 历史重试时据此识别为脱壳任务
+        presetName: unlockLabelFor(ext),
         settings: ConvertSettings.empty,
         // 脱壳输出扩展名由原生端判断：这里传"输出目录"，成功后队列会更新为真实文件
         outputPath: destDir.path,
         createdAt: now,
-        unlockFormat: 'ncm',
+        unlockFormat: ext,
         copyTreeUri: target == AppSettings.targetApp ? null : target,
       ));
     }

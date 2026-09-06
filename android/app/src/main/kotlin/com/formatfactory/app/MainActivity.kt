@@ -10,7 +10,9 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
+import com.formatfactory.app.unlock.KgmUnlocker
 import com.formatfactory.app.unlock.NcmUnlocker
+import com.formatfactory.app.unlock.QmcUnlocker
 
 /// 原生存储通道，供 Dart 侧 StorageAccess 调用：
 ///  - pickOutputDir ：打开系统 SAF 目录选择器并持久化授权
@@ -97,29 +99,60 @@ class MainActivity : FlutterFragmentActivity(), MethodChannel.MethodCallHandler 
                     return
                 }
                 // 解密是大文件 IO，放到后台线程，完成后切回主线程回调
-                Thread {
-                    try {
-                        val r = NcmUnlocker.unlock(File(src), File(destDir))
-                        runOnUiThread {
-                            result.success(
-                                mapOf(
-                                    "path" to r.outputPath,
-                                    "ext" to r.ext,
-                                ),
-                            )
-                        }
-                    } catch (e: Exception) {
-                        runOnUiThread {
-                            result.error(
-                                "unlock_failed",
-                                e.message ?: "解密失败",
-                                null,
-                            )
-                        }
-                    }
-                }.start()
+                runAsync(result) {
+                    val r = NcmUnlocker.unlock(File(src), File(destDir))
+                    mapOf("path" to r.outputPath, "ext" to r.ext)
+                }
+            }
+            "unlockQmc" -> {
+                val src = call.argument<String>("src")
+                val destDir = call.argument<String>("destDir")
+                val format = call.argument<String>("format")
+                if (src == null || destDir == null || format == null) {
+                    result.error("bad_args", "缺少参数", null)
+                    return
+                }
+                runAsync(result) {
+                    val r = QmcUnlocker.unlock(File(src), File(destDir), format)
+                    mapOf("path" to r.outputPath, "ext" to r.ext)
+                }
+            }
+            "unlockKgm" -> {
+                val src = call.argument<String>("src")
+                val destDir = call.argument<String>("destDir")
+                val format = call.argument<String>("format")
+                if (src == null || destDir == null || format == null) {
+                    result.error("bad_args", "缺少参数", null)
+                    return
+                }
+                runAsync(result) {
+                    val isVpr = format == "vpr"
+                    val r = KgmUnlocker.unlock(File(src), File(destDir), isVpr)
+                    mapOf("path" to r.outputPath, "ext" to r.ext)
+                }
             }
             else -> result.notImplemented()
         }
+    }
+
+    /** 后台线程执行解密，完成后切回主线程返回结果。 */
+    private fun runAsync(
+        result: MethodChannel.Result,
+        job: () -> Map<String, String>,
+    ) {
+        Thread {
+            try {
+                val r = job()
+                runOnUiThread { result.success(r) }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    result.error(
+                        "unlock_failed",
+                        e.message ?: "解密失败",
+                        null,
+                    )
+                }
+            }
+        }.start()
     }
 }
