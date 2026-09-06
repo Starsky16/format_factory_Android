@@ -1,112 +1,129 @@
 # 格式工厂 · Format Factory（Android）
 
 [![CI](https://github.com/Starsky16/format_factory_Android/actions/workflows/ci.yml/badge.svg)](https://github.com/Starsky16/format_factory_Android/actions/workflows/ci.yml)
-[![Build & Release](https://github.com/Starsky16/format_factory_Android/actions/workflows/release-apk.yml/badge.svg)](https://github.com/Starsky16/format_factory_Android/actions/workflows/release-apk.yml)
 [![Latest Release](https://img.shields.io/github/v/release/Starsky16/format_factory_Android?label=Download)](https://github.com/Starsky16/format_factory_Android/releases/latest)
 [![License](https://img.shields.io/github/license/Starsky16/format_factory_Android)](LICENSE)
 
-> 安装包请到 **GitHub Releases** 下载：https://github.com/Starsky16/format_factory_Android/releases/latest
+一款 Android 上的"格式工厂"：把视频、音频、图片转换成你想要的格式；还能把网易云/QQ音乐/酷狗下载的**加密音乐还原成普通格式**。全部处理都在手机本地完成，不联网、不上传。
 
-一个类似电脑端"格式工厂"的**手机版媒体格式转换工具**，支持**视频 / 音频 / 图片**三类互转、**批量**转换与后台任务队列。
+## 📲 下载与安装
 
-- 技术栈：Flutter 3.x + Material 3（Material You 风格）+ FFmpeg（`ffmpeg_kit_flutter_new`，FFmpeg v8）
-- 最低系统：Android 7.0（API 24）——由 FFmpeg 底层库要求决定，不能再低
-- 目标系统：API 36（Android 16，最新）
-- 许可证：**GPL-3.0**（原因见文末）
+安装包发布在 **GitHub Releases**：
+👉 https://github.com/Starsky16/format_factory_Android/releases/latest
 
-## v0.2 新增能力
+| 安装包 | 适用设备 |
+|---|---|
+| `app-arm64-v8a-release.apk` | 2017 年后的主流手机（**推荐**） |
+| `app-armeabi-v7a-release.apk` | 老款 32 位手机 |
+| `app-x86_64-release.apk` | Android 模拟器 / x86 平板 |
 
-- **参数可精确调整**：视频质量改 CRF 数值（0~51）、可设视频码率/帧率，每一项参数下都有中文说明
-- **自定义格式**：视频/音频/图片各提供"自定义"，编码器、封装、码率、采样率等全参数自由组合
-- **设置页**：
-  - 视频/音频/图片**输出位置分别设置**：应用专属目录，或自选 SAF 目录（系统目录选择器）
-  - **读取文件方式**切换：系统文件选择器（SAF，无需权限）/ 文件管理权限 + 内置文件浏览器
-- **通知与后台转码**：转码时通知栏实时显示"转换中 45%（1/3）"并保持后台运行，可一键关闭
-- **转码历史**：本地 SQLite 持久化，可查看 / 再次转换 / 分享 / 删除
+- 系统要求：**Android 7.0（API 24）及以上**（FFmpeg 底层库要求，无法更低）
+- 下载后直接点开 APK 安装；若提示"未知来源"，请在系统弹窗中允许本次安装
 
-## 功能一览
+## ✨ 它能做什么
 
+### 媒体格式转换
 | 类别 | 输出格式 | 可调参数 |
 |---|---|---|
-| 视频 | MP4(H.264/H.265)、MKV、AVI、MOV、WebM、FLV、3GP、GIF | 画面尺寸、视频质量 |
+| 视频 | MP4(H.264/H.265)、MKV、AVI、MOV、WebM、FLV、3GP、GIF | 分辨率、CRF 质量、视频/音频码率、帧率 |
 | 音频 | MP3、AAC(M4A)、FLAC、WAV、OGG、Opus | 码率、采样率、声道 |
-| 图片 | JPG、PNG、WebP、BMP、TIFF、GIF | 尺寸、图片质量 |
+| 图片 | JPG、PNG、WebP、BMP、TIFF、GIF | 尺寸、质量 |
 
-其它：FFprobe 读取媒体信息、批量串行队列、实时进度、单任务/全队取消、失败重试与错误详情、完成后一键分享文件。
+每类还有"**自定义**"选项，编码器/封装/码率等全部参数自由组合，每个参数下都有一行中文说明。
 
-## 项目结构（重点，都很短）
+### 音乐脱壳（加密音乐还原）
+| 来源 | 扩展名 | 还原为 |
+|---|---|---|
+| 网易云 | `.ncm` | 原始 flac / mp3 |
+| QQ 音乐 | `.qmc0/.qmc2/.qmc3/.qmcflac/.qmcogg`、`.mflac/.mflac0/.mflach/.mgg/.mgg0/.mgg1/.mggl` | 原始 flac / ogg / mp3 |
+| 酷狗 | `.kgm/.kgma/.vpr` | 原始 flac / mp3 / wav / ogg |
 
+> 说明：QQ 音乐的 `.mflac/.mgg` 等需要文件**内嵌密钥**（新下载的多数带有 QTag/V1 尾部）才能离线解密；个别文件未带密钥会明确提示，无法离线处理。
+
+### 其它贴心设计
+- **批量**：一次选多个文件，队列逐个处理，实时进度、可取消/重试/查看原因
+- **后台不中断**：切后台、锁屏也继续转，通知栏显示"转换中 45%（1/3）"，可一键关闭通知
+- **转码历史**：本地保存每次任务，可再次转换、分享、删除
+- **输出位置可设**：视频/音频/图片可分别存到"应用专属目录"或你自选的目录
+- **读取文件方式可选**：系统文件选择器（免权限）或"文件管理权限" + 内置文件浏览器（支持搜索、书签、直达主存储、全选）
+
+## 🚀 快速上手
+
+1. 打开首页点"**视频/音频/图片转换**"→ 选文件（可多选）→ 选目标格式和参数 → 开始转换；进度在底部"任务"页实时显示。
+2. 首页"**音乐脱壳**"→ 选加密音乐 → 加入任务队列，解出的原始音频自动保存。
+3. "**设置**"页可调整三类输出位置、读取文件方式、后台通知开关。
+
+## ❓ 常见问题
+
+**Q：转换/脱壳后的文件在哪里？**
+默认在应用专属目录 `Android/data/com.formatfactory.app/files/FormatFactory/<类别>/`（无需任何权限）。任务完成后点"分享"可存到相册/发给其它应用；或在设置里把输出位置改成你选的目录。
+
+**Q：为什么从 Android 7.0 才开始支持？**
+FFmpeg 转码库要求 API ≥ 24，且 5.0/6.0 设备占比不足 1%，跑视频转码体验也很差。
+
+**Q：为什么有些加密音乐提示解不了？**
+`.ncm`/`.kgm/.kgma/.vpr` 均可离线解；QQ 音乐 `.mflac/.mgg` 需要文件自带密钥（多数新版带 QTag/V1）。没有密钥的文件只能交给对应客户端处理，App 无法凭空解密。
+
+**Q：后台转码会一直常驻吗？**
+只在有任务时启动前台服务，队列完成后自动结束；可在设置里关闭"转码通知"。
+
+## ⚖️ 合规与许可证
+
+- 本应用内置 FFmpeg **full-gpl**（含 x264/x265），故本项目以 **GPL-3.0** 开源，代码见本仓库。
+- 音乐脱壳仅建议用于**你本人拥有合法使用权的本地缓存文件**，请遵守平台服务条款与你所在地区的法律；本项目不提供任何绕过付费/版权保护的逻辑。
+
+---
+## 🛠 开发者 / 贡献者专区
+
+> 以下内容面向想参与开发的人，普通用户无需阅读。
+
+**技术栈**：Flutter 3.x · Material 3 · Riverpod · FFmpeg（`ffmpeg_kit_flutter_new`）· SQLite
+**要求**：minSdk 24 / targetSdk 36
+
+**项目结构（都很短）**
 ```
 lib/
 ├── models.dart             领域模型（任务/设置/媒体信息）
-├── formats.dart            格式预设的结构 + 参数翻译助手
-├── formats_data.dart       汇总入口（按类别取格式清单）
+├── formats.dart            格式预设结构与参数翻译助手
+├── formats_data.dart       汇总入口
 ├── formats_video_data.dart 视频格式清单（想加视频格式改这里）
 ├── formats_audio_data.dart 音频格式清单
 ├── formats_image_data.dart 图片格式清单
-├── services/               FFmpeg 引擎、FFprobe、输出目录
-├── state/task_queue.dart   全局任务队列（Riverpod 串行调度）
-└── ui/                     首页 / 选择文件 / 设置 / 任务列表
+├── services/               FFmpeg 引擎、FFprobe、输出目录、解锁通道、前台通知
+├── state/                  Riverpod：任务队列 / 设置 / 历史
+└── ui/                     首页 / 转换 / 音乐脱壳 / 任务 / 历史 / 设置 / 文件浏览器
+
+android/app/src/main/kotlin/.../unlock/   脱壳算法（Ncm/Qmc/Kgm，纯 Kotlin）
+android/app/src/test/.../unlock/          JVM 单元测试（含真实 .ncm 样本与往返样本）
 ```
 
-## 三步上手
-
-### 1. 构建 APK
-
+**从源码构建与发布**
 ```bash
 flutter pub get
+flutter analyze
+flutter test
 flutter build apk --release --split-per-abi
+# 涉及脱壳算法改动另跑：
+cd android && ./gradlew :app:testDebugUnitTest
+# 打 tag 后 CI 会自动出 Release：git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z
 ```
 
-产物在 `build/app/outputs/flutter-apk/`：
-- `app-arm64-v8a-release.apk` —— 2017 年后的主流手机，**装这个即可**
-- `app-armeabi-v7a-release.apk` —— 老款 32 位手机
-- `app-x86_64-release.apk` —— 模拟器 / 平板
+**想加一种转码格式？**
+打开 `lib/formats_video_data.dart`（或 audio/image），复制一条 `FormatPreset` 改三处：
+`name/extension`（显示名与扩展名）、`fields`（设置页参数下拉框）、`buildArgs`（FFmpeg 参数，均有中文注释）。
 
-安装到手机：
+**想换主题色？**
+改 `lib/theme.dart` 里的 `seedColor` 一个值，整套 Material 3 配色自动生成。
 
-```bash
-adb install app-arm64-v8a-release.apk
-```
+**分支与协作约定**
+- `main`：只存放已验证通过的代码
+- `dev`：日常开发分支
+- 合并到 `main` 前必须通过：`flutter analyze`、`flutter test`、release 构建（涉及原生另跑 Kotlin 单测）
+- 详见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [SECURITY.md](SECURITY.md)
 
-> 注意：当前 release 包用调试签名，仅供自用测试；正式发布请自行生成 keystore 签名。
-
-### 2. 想加/改一种输出格式？
-
-打开 `lib/formats_video_data.dart`（或 audio / image），照着现有条目复制一条 `FormatPreset`，改三处即可：
-
-- `name / extension`：显示名与扩展名
-- `fields`：转换页要展示的参数下拉框
-- `buildArgs`：把用户选择翻译成 FFmpeg 参数（看不懂某个参数？它旁边都有中文注释）
-
-### 3. 想换主题色？
-
-打开 `lib/theme.dart`，改 `seedColor` 一个值，整套 Material 3 配色自动生成。
-
-## 分支与协作约定
-
-- 默认分支 `main`：只存放**已验证通过**的代码
-- 开发分支 `dev`：所有日常开发都在这提交
-- 合并到 `main` 前必须通过：`flutter analyze`、`flutter test`、`flutter build apk --release --split-per-abi`
-
-## 常见问题
-
-**Q：为什么 Android 7.0 起？**
-转码库 ffmpeg-kit 的预编译库要求 API ≥ 24；Android 5.0/6.0 设备占比已不足 1%，且跑视频转码体验差。
-
-**Q：转换后的文件在哪？**
-应用专属目录（无需任何存储权限，任何系统版本都能写）：
-`Android/data/com.formatfactory.app/files/FormatFactory/<类别>/`
-任务完成后点"分享"图标即可把文件发给其它 App 或保存到任意位置。
-
-**Q：为什么是 GPL-3.0？**
-本应用内置 FFmpeg 的 **full-gpl** 完整版（含 x264/x265 等 GPL 授权编解码器），GPL 要求衍生作品也以 GPL 开源，因此本项目选择 GPL-3.0 开源到 GitHub 是完全合规且功能最全的方案。
-
-## 致谢
-
-- [FFmpeg](https://ffmpeg.org/)
-- [ffmpeg_kit_flutter_new](https://pub.dev/packages/ffmpeg_kit_flutter_new)（FFmpegKit 活跃维护 fork）
-- [Flutter](https://flutter.dev/)
+**致谢**
+[FFmpeg](https://ffmpeg.org/) · [ffmpeg_kit_flutter_new](https://pub.dev/packages/ffmpeg_kit_flutter_new) · [Flutter](https://flutter.dev/) · 脱壳算法参考 [ncmdump](https://github.com/taurusxin/ncmdump) / [ncm2mp3-js](https://github.com/LingBrian/ncm2mp3-js) / [kugou-audio-unlock](https://github.com/onavcn/kugou-audio-unlock)（MIT）
 
 ## 注意
 本项目全数由ai生成，作者的唯一任务是保证其的行为及功能测试正常，本readme仅有这句话为人类所写
+
