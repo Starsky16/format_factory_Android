@@ -7,6 +7,10 @@ on:
     branches: [main, dev]
   workflow_dispatch:
 
+# 最小权限：CI 只读代码即可（CodeQL: workflow does not contain permissions）
+permissions:
+  contents: read
+
 jobs:
   check:
     name: flutter analyze & test
