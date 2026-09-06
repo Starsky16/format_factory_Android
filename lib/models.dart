@@ -23,11 +23,16 @@ extension MediaKindLabel on MediaKind {
 /// 转换设置里可调的参数项（每种目标格式声明自己需要展示哪些项）。
 enum SettingKey {
   resolution, // 画面尺寸
-  videoQuality, // 视频质量档位（决定文件大小）
+  videoQuality, // 视频质量（CRF 数值）
+  videoBitrate, // 视频码率 kbps（留空=用 CRF）
+  frameRate, // 帧率 fps（留空=保持源）
+  videoEncoder, // 视频编码器（自定义用）
+  audioEncoder, // 音频编码器（自定义用）
+  container, // 封装格式/扩展名（自定义用）
   audioBitrate, // 音频码率
   sampleRate, // 采样率
   channels, // 声道数
-  imageQuality, // 图片质量
+  imageQuality, // 图片质量 1~100
 }
 
 /// 一次转换的全部用户设置：key -> 选中的选项文本。
@@ -42,9 +47,11 @@ class ConvertSettings {
   String of(SettingKey key) => values[key] ?? '';
 
   /// 简洁展示已选的关键参数（用于任务列表小字说明）。
+  /// 数值型字段留空表示"自动"，展示时跳过。
   String get summary {
+    final values = this.values.values.where((v) => v.trim().isNotEmpty);
     if (values.isEmpty) return '默认参数';
-    return values.values.join(' · ');
+    return values.join(' · ');
   }
 }
 
@@ -78,6 +85,7 @@ class ConvertTask {
     required this.settings,
     required this.outputPath,
     required this.createdAt,
+    this.copyTreeUri,
     this.inputDurationSeconds,
     this.status = TaskStatus.queued,
     this.progress = 0,
@@ -96,6 +104,10 @@ class ConvertTask {
 
   /// 源时长（秒），FFprobe 读出来用于换算进度百分比。
   final double? inputDurationSeconds;
+
+  /// 若设置了"用户自选 SAF 目录"，转换完成后要把文件复制进该目录。
+  /// 值为 SAF 目录 uri；null 表示直接输出到应用专属目录。
+  final String? copyTreeUri;
 
   final TaskStatus status;
 
@@ -120,6 +132,7 @@ class ConvertTask {
       settings: settings,
       outputPath: outputPath,
       createdAt: createdAt,
+      copyTreeUri: copyTreeUri,
       inputDurationSeconds: inputDurationSeconds,
       status: status ?? this.status,
       progress: progress ?? this.progress,

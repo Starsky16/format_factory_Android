@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -7,6 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
 import '../services/ffmpeg_engine.dart';
+import '../services/foreground_notifier.dart';
+import '../services/history_store.dart';
+import '../services/storage_access.dart';
+import 'app_settings.dart';
+import 'history_notifier.dart';
 
 /// 全局任务队列（Riverpod 状态）。
 ///
@@ -24,6 +30,13 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
 
   /// 当前正在执行的 FFmpeg 会话（用于取消）。
   FFmpegSession? _activeSession;
+
+  /// 通知进度节流：记录上次通知的整百分比。
+  int _lastNotifiedPct = -1;
+
+  /// 通知开关是否开启。
+  bool get _notifyEnabled =>
+      ref.read(appSettingsProvider).notificationsEnabled;
 
   /// 生成一个大概率不重复的任务 id。
   static String newId() =>
@@ -62,6 +75,13 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
   Future<void> _run(ConvertTask task) async {
     _patch(task.id, (t) => t.copyWith(status: TaskStatus.running, progress: 0));
 
+    // 后台通知：开启时启动前台服务并显示初始进度
+    _lastNotifiedPct = -1;
+    if (_notifyEnabled) {
+      await ForegroundNotifier.start();
+      await _notify(task, 0);
+    }
+
     final command = FfmpegEngine.buildCommand(task);
     try {
       final session = await FFmpegKit.executeAsync(
@@ -70,7 +90,7 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
         (s) async {
           final rc = await s.getReturnCode();
           if (ReturnCode.isSuccess(rc)) {
-            _finish(task, succeeded: true);
+            await _saveToTarget(task);
           } else if (ReturnCode.isCancel(rc)) {
             _finish(task, canceled: true);
           } else {
@@ -79,7 +99,6 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
             final logs = await _tail(s);
             _finish(
               task,
-              succeeded: false,
               message: stack ?? logs ?? 'FFmpeg 执行失败（返回码 $rc）',
             );
           }
@@ -92,11 +111,76 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
           if (durationMs <= 0) return;
           final p = (stat.getTime() / durationMs).clamp(0.0, 1.0);
           _patch(task.id, (t) => t.copyWith(progress: p));
+          // 进度通知做节流：每 +2% 才刷新一次
+          if (_notifyEnabled) {
+            final pct = (p * 100).round();
+            if (pct >= _lastNotifiedPct + 2) {
+              _lastNotifiedPct = pct;
+              unawaited(_notify(task, p));
+            }
+          }
         },
       );
       _activeSession = session;
     } catch (e) {
       _finish(task, succeeded: false, message: '启动 FFmpeg 失败：$e');
+    }
+  }
+
+  /// 转换成功后，若该任务设置了"用户自选 SAF 目录"，把产物复制过去。
+  Future<void> _saveToTarget(ConvertTask task) async {
+    final tree = task.copyTreeUri;
+    if (tree == null) {
+      _finish(task, succeeded: true);
+      return;
+    }
+    final uri = await StorageAccess.copyToTree(
+      treeUri: tree,
+      fileName: _fileName(task.outputPath),
+      srcPath: task.outputPath,
+    );
+    if (uri == null) {
+      _finish(
+        task,
+        message: '已转换完成，但写入所选目录失败（目录可能已失效或被删）。\n'
+            '可重试，或在设置里把输出位置改回"应用专属目录"。',
+      );
+      return;
+    }
+    // 复制成功：本地保留一份内部副本供"分享"使用，故不删除
+    _finish(task, succeeded: true);
+  }
+
+  /// 取路径最后一段作为文件名。
+  static String _fileName(String path) {
+    final slash = path.lastIndexOf('/');
+    final backslash = path.lastIndexOf('\\');
+    return path.substring((slash > backslash ? slash : backslash) + 1);
+  }
+
+  /// 更新一条通知内容。
+  Future<void> _notify(ConvertTask task, double p) async {
+    final active = state.where((t) => !t.status.isFinished).length;
+    final title = active > 1 ? '正在转换，剩余 $active 个任务' : '正在转换…';
+    final rawName = task.inputName;
+    final name = rawName.length > 30
+        ? '${rawName.substring(0, 30)}…'
+        : rawName;
+    await ForegroundNotifier.update(
+      title: title,
+      text: '$name ${(p * 100).round()}%',
+    );
+  }
+
+  /// 把已结束的任务写入历史库并刷新历史列表。
+  Future<void> _archive(String id) async {
+    final row = state.where((t) => t.id == id).firstOrNull;
+    if (row == null) return;
+    try {
+      await HistoryStore.save(row);
+      await ref.read(historyProvider.notifier).refresh();
+    } catch (_) {
+      // 历史写失败不阻塞主流程
     }
   }
 
@@ -114,16 +198,26 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
         canceled ? TaskStatus.canceled : (succeeded ? TaskStatus.succeeded : TaskStatus.failed);
 
     _patch(task.id, (t) {
-      final updated =
-          t.copyWith(status: status, progress: succeeded ? 1.0 : t.progress, error: message);
+      final updated = t.copyWith(
+        status: status,
+        progress: succeeded ? 1.0 : t.progress,
+        error: message,
+      );
       return updated;
     });
+
+    // 任务已结束 → 写入转码历史
+    unawaited(_archive(task.id));
 
     // 失败/取消时清掉可能留下的半截输出文件
     if (!succeeded) {
       _deleteOutput(task.outputPath);
     }
     _pump();
+    // 队列已空：停止前台服务/通知
+    if (_notifyEnabled && !state.any((t) => !t.status.isFinished)) {
+      unawaited(ForegroundNotifier.stop());
+    }
   }
 
   static void _deleteOutput(String path) {

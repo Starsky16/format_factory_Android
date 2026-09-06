@@ -50,3 +50,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // SAF 文档操作（MainActivity 的存储通道使用）
+    implementation("androidx.documentfile:documentfile:1.0.1")
+}

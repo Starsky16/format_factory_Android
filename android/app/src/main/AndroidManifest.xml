@@ -30,7 +30,28 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- flutter_foreground_task 前台服务（保持转码进程存活） -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
     </application>
+    <!-- ===== 读取文件方式 = "文件管理权限"时使用 ===== -->
+    <!-- Android 10 及以下：经典读写权限 -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <!-- Android 11+：所有文件访问（需要用户去系统设置里手动开启） -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- ===== 前台服务：后台转码时保活 + 通知进度 ===== -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Android 13+ 显示通知需要 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
          https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.

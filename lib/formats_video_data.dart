@@ -110,12 +110,8 @@ final List<FormatPreset> videoPresets = [
     description: '网页通用（VP9 + Opus），压缩率高',
     fields: const [fieldResolution, fieldVideoQuality],
     buildArgs: (s) {
-      // VP9：码率必须为 0，用 CRF 控制质量（值越大越省空间）
-      final crf = switch (s.of(SettingKey.videoQuality)) {
-        '画质优先' => 28,
-        '体积优先' => 40,
-        _ => 34,
-      };
+      // VP9：用 CRF 控制质量，数值区间整体比 H.264 大，因此在 H.264 基础上 +8
+      final crf = videoQualityCrf(s) + 8;
       final args = <String>[
         '-c:v', 'libvpx-vp9',
         '-crf', '$crf',
@@ -179,5 +175,28 @@ final List<FormatPreset> videoPresets = [
       args.addAll(['-c:v', 'gif']);
       return args;
     },
+  ),
+  // 自定义：上面所有参数 + 编码器/封装自由组合
+  FormatPreset(
+    id: 'video_custom',
+    kind: MediaKind.video,
+    name: '自定义',
+    extension: 'mp4',
+    description: '自由组合全部参数：编码器、封装、尺寸、帧率、码率、音频…'
+        '（请留意编码器与封装需兼容，如 VP9 建议配 WebM）',
+    fields: const [
+      fieldContainer,
+      fieldVideoEncoder,
+      fieldResolution,
+      fieldFrameRate,
+      fieldVideoQuality,
+      fieldVideoBitrate,
+      fieldAudioEncoder,
+      fieldAudioBitrate,
+      fieldSampleRate,
+      fieldChannels,
+    ],
+    buildArgs: customVideoArgs,
+    extFn: videoContainerExt,
   ),
 ];

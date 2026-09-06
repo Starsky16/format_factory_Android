@@ -91,4 +91,20 @@ final List<FormatPreset> audioPresets = [
       return args;
     },
   ),
+  // 自定义：自由选择音频编码器与各项参数
+  FormatPreset(
+    id: 'audio_custom',
+    kind: MediaKind.audio,
+    name: '自定义',
+    extension: 'm4a',
+    description: '自由选择音频编码器（AAC/MP3/Opus/Vorbis/FLAC/WAV）并调整码率、采样率、声道',
+    fields: const [
+      fieldAudioEncoder,
+      fieldAudioBitrate,
+      fieldSampleRate,
+      fieldChannels,
+    ],
+    buildArgs: (s) => customAudioResult(s).args,
+    extFn: (s) => customAudioResult(s).ext,
+  ),
 ];
