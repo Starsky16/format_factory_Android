@@ -37,10 +37,10 @@
             android:exported="false" />
     </application>
     <!-- ===== 读取文件方式 = "文件管理权限"时使用 ===== -->
-    <!-- Android 10 及以下：经典读写权限 -->
+    <!-- Android 10 及以下：经典读写权限（READ 给到 API 32，兼容 Android 9/10 全盘浏览） -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+        android:maxSdkVersion="32" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
