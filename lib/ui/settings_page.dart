@@ -115,36 +115,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'saf',
-                      label: Text('系统文件选择器'),
-                      icon: Icon(Icons.folder_open),
-                    ),
-                    ButtonSegment(
-                      value: 'manage',
-                      label: Text('文件管理权限'),
-                      icon: Icon(Icons.admin_panel_settings_outlined),
-                    ),
-                  ],
-                  selected: {settings.pickerMode},
-                  onSelectionChanged: (sel) {
-                    ref.read(appSettingsProvider.notifier).setPickerMode(
-                          sel.first,
-                        );
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.folder_open_outlined),
+                  title: const Text('系统文件选择器'),
+                  subtitle: const Text('用系统界面选择文件，无需任何权限，隐私最好'),
+                  trailing: settings.pickerMode == 'saf'
+                      ? Icon(Icons.check_circle,
+                          color: theme.colorScheme.primary)
+                      : const Icon(Icons.radio_button_unchecked),
+                  onTap: () {
+                    ref
+                        .read(appSettingsProvider.notifier)
+                        .setPickerMode('saf');
                     _refreshPermission();
                   },
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  settings.pickerMode == 'saf'
-                      ? '推荐：用系统文件选择器选文件，无需任何权限，隐私最好。'
-                      : 'Android 11+ 需开启"所有文件访问"，可浏览整台设备的文件。',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                const Divider(height: 1),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
+                  title: const Text('文件管理权限'),
+                  subtitle: const Text('Android 11+ 需开启"所有文件访问"，可浏览整台设备'),
+                  trailing: settings.pickerMode == 'manage'
+                      ? Icon(Icons.check_circle,
+                          color: theme.colorScheme.primary)
+                      : const Icon(Icons.radio_button_unchecked),
+                  onTap: () {
+                    ref
+                        .read(appSettingsProvider.notifier)
+                        .setPickerMode('manage');
+                    _refreshPermission();
+                  },
                 ),
               ],
             ),
