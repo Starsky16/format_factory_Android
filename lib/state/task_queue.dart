@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
 import '../services/ffmpeg_engine.dart';
+import '../services/storage_access.dart';
 
 /// 全局任务队列（Riverpod 状态）。
 ///
@@ -70,7 +71,7 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
         (s) async {
           final rc = await s.getReturnCode();
           if (ReturnCode.isSuccess(rc)) {
-            _finish(task, succeeded: true);
+            await _saveToTarget(task);
           } else if (ReturnCode.isCancel(rc)) {
             _finish(task, canceled: true);
           } else {
@@ -79,7 +80,6 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
             final logs = await _tail(s);
             _finish(
               task,
-              succeeded: false,
               message: stack ?? logs ?? 'FFmpeg 执行失败（返回码 $rc）',
             );
           }
@@ -98,6 +98,37 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
     } catch (e) {
       _finish(task, succeeded: false, message: '启动 FFmpeg 失败：$e');
     }
+  }
+
+  /// 转换成功后，若该任务设置了"用户自选 SAF 目录"，把产物复制过去。
+  Future<void> _saveToTarget(ConvertTask task) async {
+    final tree = task.copyTreeUri;
+    if (tree == null) {
+      _finish(task, succeeded: true);
+      return;
+    }
+    final uri = await StorageAccess.copyToTree(
+      treeUri: tree,
+      fileName: _fileName(task.outputPath),
+      srcPath: task.outputPath,
+    );
+    if (uri == null) {
+      _finish(
+        task,
+        message: '已转换完成，但写入所选目录失败（目录可能已失效或被删）。\n'
+            '可重试，或在设置里把输出位置改回"应用专属目录"。',
+      );
+      return;
+    }
+    // 复制成功：本地保留一份内部副本供"分享"使用，故不删除
+    _finish(task, succeeded: true);
+  }
+
+  /// 取路径最后一段作为文件名。
+  static String _fileName(String path) {
+    final slash = path.lastIndexOf('/');
+    final backslash = path.lastIndexOf('\\');
+    return path.substring((slash > backslash ? slash : backslash) + 1);
   }
 
   /// 结束当前任务并调度下一个。

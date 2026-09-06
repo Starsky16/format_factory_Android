@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 import '../state/task_queue.dart';
 import 'convert_flow.dart';
+import 'settings_page.dart';
 import 'task_list_page.dart';
 
 /// 应用外壳：底部两个标签页 —— 转换(首页) / 任务。
@@ -37,7 +38,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         .length;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_index == 0 ? '格式工厂' : '转换任务'),
+        title: Text(switch (_index) {
+          0 => '格式工厂',
+          1 => '转换任务',
+          _ => '设置',
+        }),
         actions: _index == 1
             ? [
                 TextButton.icon(
@@ -54,6 +59,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         children: [
           _HomeView(onConvert: _openConvert),
           const TasksPage(),
+          const SettingsPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -77,6 +83,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               child: const Icon(Icons.task_alt),
             ),
             label: '任务',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: '设置',
           ),
         ],
       ),

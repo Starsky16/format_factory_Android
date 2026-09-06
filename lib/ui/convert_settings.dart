@@ -6,6 +6,7 @@ import '../formats.dart';
 import '../formats_data.dart';
 import '../models.dart';
 import '../services/file_store.dart';
+import '../state/app_settings.dart';
 import '../state/task_queue.dart';
 import 'picked_media.dart';
 
@@ -59,11 +60,14 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
     final now = DateTime.now();
     final settings = ConvertSettings(Map.of(_values));
     final outExt = _preset.outExt(settings);
+    // 输出目标："app" 或用户自选 SAF 目录 uri
+    final target = ref.read(appSettingsProvider).targetOf(widget.kind);
     for (final f in widget.files) {
       final outPath = await FileStore.uniqueOutputPath(
         widget.kind,
         f.name,
         outExt,
+        target: target,
       );
       tasks.add(ConvertTask(
         id: TaskQueue.newId(),
@@ -75,6 +79,7 @@ class _ConvertSettingsPageState extends ConsumerState<ConvertSettingsPage> {
         settings: settings,
         outputPath: outPath,
         createdAt: now,
+        copyTreeUri: target == AppSettings.targetApp ? null : target,
         inputDurationSeconds: f.info?.durationSeconds,
       ));
     }

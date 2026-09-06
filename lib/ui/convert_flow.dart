@@ -1,9 +1,15 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../models.dart';
 import '../services/media_probe.dart';
+import '../state/app_settings.dart';
 import 'convert_settings.dart';
+import 'file_browser_page.dart';
 import 'picked_media.dart';
 
 /// 各类别允许选择的扩展名（系统文件选择器用来过滤）。
@@ -23,16 +29,16 @@ const List<String> kImageExtensions = [
 /// 转换流程第一步：选择并预览待转换文件。
 /// 用户点"选择格式并转换"后进入 ConvertSettingsPage；
 /// 那边入队成功会把本次添加的任务数量 pop 回来，本页再 pop 给首页。
-class ConvertFlow extends StatefulWidget {
+class ConvertFlow extends ConsumerStatefulWidget {
   const ConvertFlow({super.key, required this.kind});
 
   final MediaKind kind;
 
   @override
-  State<ConvertFlow> createState() => _ConvertFlowState();
+  ConsumerState<ConvertFlow> createState() => _ConvertFlowState();
 }
 
-class _ConvertFlowState extends State<ConvertFlow> {
+class _ConvertFlowState extends ConsumerState<ConvertFlow> {
   final List<PickedMedia> _files = [];
   bool _picking = false;
 
@@ -43,6 +49,17 @@ class _ConvertFlowState extends State<ConvertFlow> {
       };
 
   Future<void> _pickFiles() async {
+    // 按设置里的"读取文件方式"选择文件：SAF 系统选择器 / 文件管理权限浏览器
+    final mode = ref.read(appSettingsProvider).pickerMode;
+    if (mode == 'manage' && Platform.isAndroid) {
+      await _pickWithBrowser();
+      return;
+    }
+    await _pickWithSystemPicker();
+  }
+
+  /// 方式一：系统文件选择器（SAF），无需权限。
+  Future<void> _pickWithSystemPicker() async {
     setState(() => _picking = true);
     try {
       List<PlatformFile> files;
@@ -79,6 +96,67 @@ class _ConvertFlowState extends State<ConvertFlow> {
       }
     } finally {
       if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  /// 方式二：文件管理权限 + 自建文件浏览器。
+  Future<void> _pickWithBrowser() async {
+    setState(() => _picking = true);
+    try {
+      final granted = await _ensureManagePermission();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('需要"所有文件访问"权限才能浏览整台设备。'
+                '请到设置页开启该权限后再试。'),
+          ));
+        }
+        return;
+      }
+      if (!mounted) return; // 授权期间页面可能已被销毁
+      final picked = await Navigator.of(context).push<List<String>>(
+        MaterialPageRoute(
+          builder: (_) => FileBrowserPage(extensions: _exts),
+        ),
+      );
+      if (picked == null || picked.isEmpty || !mounted) return;
+
+      final fresh = <PickedMedia>[];
+      for (final p in picked) {
+        if (_files.any((e) => e.path == p)) continue; // 去重
+        final f = File(p);
+        fresh.add(PickedMedia(
+          path: p,
+          name: p.split(Platform.pathSeparator).last,
+          sizeBytes: _safeFileSize(f),
+        ));
+      }
+      if (fresh.isEmpty) return;
+      setState(() => _files.addAll(fresh));
+      _probeAll(fresh);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  /// 请求文件管理权限并返回是否已授予。
+  /// Android 11+ 用"所有文件访问"；Android 10 及以下用存储权限。
+  static Future<bool> _ensureManagePermission() async {
+    final sdk = int.tryParse(Platform.version.split('.').first) ?? 0;
+    final perm =
+        sdk >= 30 ? Permission.manageExternalStorage : Permission.storage;
+    var status = await perm.status;
+    if (!status.isGranted) {
+      status = await perm.request();
+    }
+    return status.isGranted;
+  }
+
+  static int _safeFileSize(File f) {
+    try {
+      return f.lengthSync();
+    } catch (_) {
+      return 0;
     }
   }
 

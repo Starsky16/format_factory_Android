@@ -85,6 +85,7 @@ class ConvertTask {
     required this.settings,
     required this.outputPath,
     required this.createdAt,
+    this.copyTreeUri,
     this.inputDurationSeconds,
     this.status = TaskStatus.queued,
     this.progress = 0,
@@ -103,6 +104,10 @@ class ConvertTask {
 
   /// 源时长（秒），FFprobe 读出来用于换算进度百分比。
   final double? inputDurationSeconds;
+
+  /// 若设置了"用户自选 SAF 目录"，转换完成后要把文件复制进该目录。
+  /// 值为 SAF 目录 uri；null 表示直接输出到应用专属目录。
+  final String? copyTreeUri;
 
   final TaskStatus status;
 
@@ -127,6 +132,7 @@ class ConvertTask {
       settings: settings,
       outputPath: outputPath,
       createdAt: createdAt,
+      copyTreeUri: copyTreeUri,
       inputDurationSeconds: inputDurationSeconds,
       status: status ?? this.status,
       progress: progress ?? this.progress,
