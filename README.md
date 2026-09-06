@@ -101,3 +101,5 @@ adb install app-arm64-v8a-release.apk
 - [ffmpeg_kit_flutter_new](https://pub.dev/packages/ffmpeg_kit_flutter_new)（FFmpegKit 活跃维护 fork）
 - [Flutter](https://flutter.dev/)
 
+## 注意
+本项目全数由ai生成，作者的唯一任务是保证其的行为及功能测试正常，本readme仅有这句话为人类所写
