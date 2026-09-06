@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
 import '../services/file_store.dart';
+import '../services/manage_permission.dart';
 import '../services/storage_access.dart';
 import '../services/unlock_api.dart';
 import '../state/app_settings.dart';
+import 'file_browser_page.dart';
 import 'picked_media.dart';
 
 /// "音乐脱壳"：把 .ncm（后续含 .qmc/.kgm）解成原始 flac/mp3，直接保存，不做转码。
@@ -37,29 +39,68 @@ class _UnlockPageState extends ConsumerState<UnlockPage> {
   bool _busy = false;
 
   Future<void> _pick() async {
+    // 与转换流程一致：按设置里的"读取文件方式"选择
+    final mode = ref.read(appSettingsProvider).pickerMode;
+    if (mode == 'manage' && Platform.isAndroid) {
+      await _pickWithBrowser();
+      return;
+    }
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['ncm'],
       );
       if (files.isEmpty) return;
-      final fresh = <_Entry>[];
-      for (final f in files) {
-        if (f.path == null) continue;
-        if (_entries.any((e) => e.path == f.path)) continue;
-        fresh.add(_Entry(
-          path: f.path!,
-          name: f.name,
-          size: f.lengthSync() ?? 0,
-        ));
-      }
-      if (fresh.isNotEmpty) setState(() => _entries.addAll(fresh));
+      _addPaths([for (final f in files) if (f.path != null) f.path!]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('选择文件失败：$e')),
         );
       }
+    }
+  }
+
+  /// 文件管理权限模式：用自建文件浏览器选取。
+  Future<void> _pickWithBrowser() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final granted = await ManagePermission.ensureGranted();
+    if (!granted) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('需要"文件管理权限"才能浏览文件。请在系统弹窗中开启后重试。'),
+      ));
+      return;
+    }
+    if (!mounted) return;
+    final picked = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => const FileBrowserPage(extensions: ['ncm']),
+      ),
+    );
+    if (picked == null || picked.isEmpty || !mounted) return;
+    _addPaths(picked);
+  }
+
+  void _addPaths(List<String> paths) {
+    final fresh = <_Entry>[];
+    for (final p in paths) {
+      if (_entries.any((e) => e.path == p)) continue;
+      final f = File(p);
+      fresh.add(_Entry(
+        path: p,
+        name: p.split(Platform.pathSeparator).last,
+        size: _safeSize(f),
+      ));
+    }
+    if (fresh.isEmpty) return;
+    setState(() => _entries.addAll(fresh));
+  }
+
+  static int _safeSize(File f) {
+    try {
+      return f.lengthSync();
+    } catch (_) {
+      return 0;
     }
   }
 
