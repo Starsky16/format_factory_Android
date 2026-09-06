@@ -56,3 +56,7 @@ unit_test_log*.txt
 android/tools/ref/qmc-js/
 android/tools/ref/kgm-py/
 
+
+# gradle/flutter 本地日志
+ut_*.txt
+unit_test_log*.txt
