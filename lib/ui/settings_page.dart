@@ -81,6 +81,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ),
         ),
+        _sectionTitle('通知'),
+        Card(
+          child: SwitchListTile(
+            secondary: const Icon(Icons.notifications_active_outlined),
+            title: const Text('转码通知'),
+            subtitle: const Text('开启后：转码时在通知栏实时显示进度，'
+                '并且切到后台 / 锁屏也不会中断。'),
+            value: settings.notificationsEnabled,
+            onChanged: (on) async {
+              final messenger = ScaffoldMessenger.of(context);
+              // Android 13+ 首次开启时申请通知权限
+              if (on && Platform.isAndroid) {
+                final v = int.tryParse(Platform.version.split('.').first) ?? 0;
+                if (v >= 33) {
+                  final s = await Permission.notification.request();
+                  if (!s.isGranted) {
+                    messenger.showSnackBar(const SnackBar(
+                      content: Text('未授予通知权限，将无法在后台显示进度通知'),
+                    ));
+                  }
+                }
+              }
+              await ref
+                  .read(appSettingsProvider.notifier)
+                  .setNotificationsEnabled(on);
+            },
+          ),
+        ),
         const SizedBox(height: 12),
         _sectionTitle('读取文件方式'),
         Card(

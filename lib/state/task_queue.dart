@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -7,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
 import '../services/ffmpeg_engine.dart';
+import '../services/foreground_notifier.dart';
 import '../services/storage_access.dart';
+import 'app_settings.dart';
 
 /// 全局任务队列（Riverpod 状态）。
 ///
@@ -25,6 +28,13 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
 
   /// 当前正在执行的 FFmpeg 会话（用于取消）。
   FFmpegSession? _activeSession;
+
+  /// 通知进度节流：记录上次通知的整百分比。
+  int _lastNotifiedPct = -1;
+
+  /// 通知开关是否开启。
+  bool get _notifyEnabled =>
+      ref.read(appSettingsProvider).notificationsEnabled;
 
   /// 生成一个大概率不重复的任务 id。
   static String newId() =>
@@ -63,6 +73,13 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
   Future<void> _run(ConvertTask task) async {
     _patch(task.id, (t) => t.copyWith(status: TaskStatus.running, progress: 0));
 
+    // 后台通知：开启时启动前台服务并显示初始进度
+    _lastNotifiedPct = -1;
+    if (_notifyEnabled) {
+      await ForegroundNotifier.start();
+      await _notify(task, 0);
+    }
+
     final command = FfmpegEngine.buildCommand(task);
     try {
       final session = await FFmpegKit.executeAsync(
@@ -92,6 +109,14 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
           if (durationMs <= 0) return;
           final p = (stat.getTime() / durationMs).clamp(0.0, 1.0);
           _patch(task.id, (t) => t.copyWith(progress: p));
+          // 进度通知做节流：每 +2% 才刷新一次
+          if (_notifyEnabled) {
+            final pct = (p * 100).round();
+            if (pct >= _lastNotifiedPct + 2) {
+              _lastNotifiedPct = pct;
+              unawaited(_notify(task, p));
+            }
+          }
         },
       );
       _activeSession = session;
@@ -131,6 +156,20 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
     return path.substring((slash > backslash ? slash : backslash) + 1);
   }
 
+  /// 更新一条通知内容。
+  Future<void> _notify(ConvertTask task, double p) async {
+    final active = state.where((t) => !t.status.isFinished).length;
+    final title = active > 1 ? '正在转换，剩余 $active 个任务' : '正在转换…';
+    final rawName = task.inputName;
+    final name = rawName.length > 30
+        ? '${rawName.substring(0, 30)}…'
+        : rawName;
+    await ForegroundNotifier.update(
+      title: title,
+      text: '$name ${(p * 100).round()}%',
+    );
+  }
+
   /// 结束当前任务并调度下一个。
   void _finish(
     ConvertTask task, {
@@ -155,6 +194,10 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
       _deleteOutput(task.outputPath);
     }
     _pump();
+    // 队列已空：停止前台服务/通知
+    if (_notifyEnabled && !state.any((t) => !t.status.isFinished)) {
+      unawaited(ForegroundNotifier.stop());
+    }
   }
 
   static void _deleteOutput(String path) {

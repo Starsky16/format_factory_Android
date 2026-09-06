@@ -20,12 +20,16 @@ class AppSettings {
     required this.videoTarget,
     required this.audioTarget,
     required this.imageTarget,
+    this.notificationsEnabled = true,
   });
 
   final String pickerMode;
   final String videoTarget;
   final String audioTarget;
   final String imageTarget;
+
+  /// 转码时是否显示通知 + 保持后台运行。
+  final bool notificationsEnabled;
 
   static const String targetApp = 'app';
 
@@ -40,12 +44,14 @@ class AppSettings {
     String? videoTarget,
     String? audioTarget,
     String? imageTarget,
+    bool? notificationsEnabled,
   }) {
     return AppSettings(
       pickerMode: pickerMode ?? this.pickerMode,
       videoTarget: videoTarget ?? this.videoTarget,
       audioTarget: audioTarget ?? this.audioTarget,
       imageTarget: imageTarget ?? this.imageTarget,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     );
   }
 }
@@ -58,6 +64,7 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   static const _kV = 'out.video';
   static const _kA = 'out.audio';
   static const _kI = 'out.image';
+  static const _kNotify = 'notify.enabled';
 
   @override
   AppSettings build() {
@@ -67,6 +74,7 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
       videoTarget: p.getString(_kV) ?? AppSettings.targetApp,
       audioTarget: p.getString(_kA) ?? AppSettings.targetApp,
       imageTarget: p.getString(_kI) ?? AppSettings.targetApp,
+      notificationsEnabled: p.getBool(_kNotify) ?? true,
     );
   }
 
@@ -86,11 +94,18 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     await _persist();
   }
 
+  /// 通知（后台进度条）开关。
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    state = state.copyWith(notificationsEnabled: enabled);
+    await _persist();
+  }
+
   Future<void> _persist() async {
     final p = ref.read(sharedPrefsProvider);
     await p.setString(_kPicker, state.pickerMode);
     await p.setString(_kV, state.videoTarget);
     await p.setString(_kA, state.audioTarget);
     await p.setString(_kI, state.imageTarget);
+    await p.setBool(_kNotify, state.notificationsEnabled);
   }
 }
