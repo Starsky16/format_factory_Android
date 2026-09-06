@@ -9,8 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 import '../services/ffmpeg_engine.dart';
 import '../services/foreground_notifier.dart';
+import '../services/history_store.dart';
 import '../services/storage_access.dart';
 import 'app_settings.dart';
+import 'history_notifier.dart';
 
 /// 全局任务队列（Riverpod 状态）。
 ///
@@ -170,6 +172,18 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
     );
   }
 
+  /// 把已结束的任务写入历史库并刷新历史列表。
+  Future<void> _archive(String id) async {
+    final row = state.where((t) => t.id == id).firstOrNull;
+    if (row == null) return;
+    try {
+      await HistoryStore.save(row);
+      await ref.read(historyProvider.notifier).refresh();
+    } catch (_) {
+      // 历史写失败不阻塞主流程
+    }
+  }
+
   /// 结束当前任务并调度下一个。
   void _finish(
     ConvertTask task, {
@@ -184,10 +198,16 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
         canceled ? TaskStatus.canceled : (succeeded ? TaskStatus.succeeded : TaskStatus.failed);
 
     _patch(task.id, (t) {
-      final updated =
-          t.copyWith(status: status, progress: succeeded ? 1.0 : t.progress, error: message);
+      final updated = t.copyWith(
+        status: status,
+        progress: succeeded ? 1.0 : t.progress,
+        error: message,
+      );
       return updated;
     });
+
+    // 任务已结束 → 写入转码历史
+    unawaited(_archive(task.id));
 
     // 失败/取消时清掉可能留下的半截输出文件
     if (!succeeded) {

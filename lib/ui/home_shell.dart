@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
+import '../state/history_notifier.dart';
 import '../state/task_queue.dart';
 import 'convert_flow.dart';
+import 'history_page.dart';
 import 'settings_page.dart';
 import 'task_list_page.dart';
 
@@ -41,7 +43,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         title: Text(switch (_index) {
           0 => '格式工厂',
           1 => '转换任务',
-          _ => '设置',
+          2 => '设置',
+          _ => '转码历史',
         }),
         actions: _index == 1
             ? [
@@ -52,7 +55,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   label: const Text('清空已完成'),
                 ),
               ]
-            : null,
+            : _index == 3
+                ? [
+                    TextButton.icon(
+                      onPressed: () => ref
+                          .read(historyProvider.notifier)
+                          .clearAll(),
+                      icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                      label: const Text('清空历史'),
+                    ),
+                  ]
+                : null,
       ),
       body: IndexedStack(
         index: _index,
@@ -60,6 +73,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           _HomeView(onConvert: _openConvert),
           const TasksPage(),
           const SettingsPage(),
+          const HistoryPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -88,6 +102,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
             label: '设置',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: '历史',
           ),
         ],
       ),
