@@ -288,44 +288,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget _permissionCard() {
     final theme = Theme.of(context);
     final granted = _manageStatus?.isGranted ?? false;
-    final text = granted
+    final title = granted ? '文件管理权限已开启' : '文件管理权限未开启';
+    final body = granted
         ? '已开启：可以浏览整台设备的文件。'
         : (_isAndroid11Plus
-            ? 'Android 11+ 需要到系统设置里开启"所有文件访问"，才能用文件管理权限读取文件。'
+            ? 'Android 11+：需要到系统设置里开启"所有文件访问"，才能用文件管理权限读取文件。'
             : 'Android 10 及以下：需要授予存储权限后才能浏览文件。');
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          // 纯纵向布局：文字以整行宽度自然折行，任何字体大小都不会竖排
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              granted ? Icons.verified_user_outlined : Icons.lock_outline,
-              color:
-                  granted ? const Color(0xFF2E7D32) : theme.colorScheme.error,
+            Row(
+              children: [
+                Icon(
+                  granted
+                      ? Icons.verified_user_outlined
+                      : Icons.lock_outline,
+                  color: granted
+                      ? const Color(0xFF2E7D32)
+                      : theme.colorScheme.error,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(title, style: theme.textTheme.titleSmall),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            // 用 Expanded 包住文字，保证说明文本始终有足够宽度（避免被挤成竖排）
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    granted ? '文件管理权限已开启' : '文件管理权限未开启',
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(text, style: theme.textTheme.bodySmall),
-                ],
+            const SizedBox(height: 8),
+            Text(body, style: theme.textTheme.bodySmall),
+            const SizedBox(height: 12),
+            if (!granted)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonal(
+                  onPressed: _grantManage,
+                  child: const Text('去授权'),
+                ),
               ),
-            ),
-            if (!granted) ...[
-              const SizedBox(width: 8),
-              FilledButton.tonal(
-                onPressed: _grantManage,
-                child: const Text('去授权'),
-              ),
-            ],
           ],
         ),
       ),

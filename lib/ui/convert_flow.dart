@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../models.dart';
+import '../services/manage_permission.dart';
 import '../services/media_probe.dart';
 import '../state/app_settings.dart';
 import 'convert_settings.dart';
@@ -139,28 +139,8 @@ class _ConvertFlowState extends ConsumerState<ConvertFlow> {
     }
   }
 
-  /// 请求文件管理权限并返回是否已授予。
-  /// Android 11+ 用"所有文件访问"；Android 10 及以下用存储权限。
-  Future<bool> _ensureManagePermission() async {
-    final sdk = int.tryParse(Platform.version.split('.').first) ?? 0;
-    final perm =
-        sdk >= 30 ? Permission.manageExternalStorage : Permission.storage;
-    var status = await perm.status;
-    if (!status.isGranted) {
-      status = await perm.request();
-    }
-    if (status.isGranted) return true;
-    // 被永久拒绝时，引导去系统设置手动开启
-    if (status.isPermanentlyDenied && mounted) {
-      final messenger = ScaffoldMessenger.of(context);
-      await openAppSettings();
-      messenger.showSnackBar(const SnackBar(
-        content: Text('请在系统设置中开启存储/文件权限后，回到本页重新选择'),
-      ));
-      return false;
-    }
-    return false;
-  }
+  /// 请求文件管理权限并返回是否已授予（Android 9/10 与 11+ 自动分流）。
+  Future<bool> _ensureManagePermission() => ManagePermission.ensureGranted();
 
   static int _safeFileSize(File f) {
     try {
