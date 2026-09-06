@@ -49,16 +49,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   /// 请求"所有文件访问"权限。
   Future<void> _grantManage() async {
     final messenger = ScaffoldMessenger.of(context);
+    PermissionStatus s;
     if (_isAndroid11Plus) {
-      await Permission.manageExternalStorage.request();
+      s = await Permission.manageExternalStorage.request();
     } else {
-      await Permission.storage.request();
+      s = await Permission.storage.request();
     }
     await _refreshPermission();
-    final ok = await _permStatus().then((s) => s.isGranted);
-    messenger.showSnackBar(SnackBar(
-      content: Text(ok ? '已获得所有文件访问权限' : '未授权。你可以在系统设置中开启后再试'),
-    ));
+
+    if (s.isGranted) {
+      messenger.showSnackBar(const SnackBar(content: Text('已获得文件访问权限')));
+      return;
+    }
+    // Android 9 及以下：若被永久拒绝，引导去系统设置开启
+    if (s.isPermanentlyDenied) {
+      await openAppSettings();
+      messenger.showSnackBar(const SnackBar(
+        content: Text('请在系统设置中打开"存储"权限后再返回本页重试'),
+      ));
+    } else {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('未授权。你可以在系统设置中开启后再试'),
+      ));
+    }
   }
 
   @override
@@ -279,21 +292,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ? '已开启：可以浏览整台设备的文件。'
         : (_isAndroid11Plus
             ? 'Android 11+ 需要到系统设置里开启"所有文件访问"，才能用文件管理权限读取文件。'
-            : '需要授予存储权限后才能浏览文件。');
+            : 'Android 10 及以下：需要授予存储权限后才能浏览文件。');
     return Card(
-      child: ListTile(
-        leading: Icon(
-          granted ? Icons.verified_user_outlined : Icons.lock_outline,
-          color: granted ? const Color(0xFF2E7D32) : theme.colorScheme.error,
-        ),
-        title: Text(granted ? '文件管理权限已开启' : '文件管理权限未开启'),
-        subtitle: Text(text),
-        trailing: granted
-            ? null
-            : FilledButton.tonal(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              granted ? Icons.verified_user_outlined : Icons.lock_outline,
+              color:
+                  granted ? const Color(0xFF2E7D32) : theme.colorScheme.error,
+            ),
+            const SizedBox(width: 12),
+            // 用 Expanded 包住文字，保证说明文本始终有足够宽度（避免被挤成竖排）
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    granted ? '文件管理权限已开启' : '文件管理权限未开启',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(text, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            if (!granted) ...[
+              const SizedBox(width: 8),
+              FilledButton.tonal(
                 onPressed: _grantManage,
                 child: const Text('去授权'),
               ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -69,8 +69,15 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
               builder: (context, snap) {
                 if (snap.hasError) {
                   return Center(
-                    child: Text('无法读取该目录：${snap.error}',
-                        style: TextStyle(color: theme.colorScheme.error)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        '无法读取该目录（可能没有访问权限或目录已不可用）：\n${snap.error}\n\n'
+                        '请确认已开启"文件管理权限"，再返回上一级目录重试。',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: theme.colorScheme.error),
+                      ),
+                    ),
                   );
                 }
                 return _fileList(theme, snap.data ?? const []);
