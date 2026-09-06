@@ -49,3 +49,5 @@ app.*.map.json
 
 # 构建日志
 build_log*.txt
+unit_test_log*.txt
+
