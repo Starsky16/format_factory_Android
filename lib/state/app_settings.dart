@@ -21,6 +21,7 @@ class AppSettings {
     required this.audioTarget,
     required this.imageTarget,
     this.notificationsEnabled = true,
+    this.concurrentTasks = 1,
   });
 
   final String pickerMode;
@@ -30,6 +31,9 @@ class AppSettings {
 
   /// 转码时是否显示通知 + 保持后台运行。
   final bool notificationsEnabled;
+
+  /// 同时执行的任务数（并行度），1 = 串行。
+  final int concurrentTasks;
 
   static const String targetApp = 'app';
 
@@ -45,6 +49,7 @@ class AppSettings {
     String? audioTarget,
     String? imageTarget,
     bool? notificationsEnabled,
+    int? concurrentTasks,
   }) {
     return AppSettings(
       pickerMode: pickerMode ?? this.pickerMode,
@@ -52,6 +57,7 @@ class AppSettings {
       audioTarget: audioTarget ?? this.audioTarget,
       imageTarget: imageTarget ?? this.imageTarget,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      concurrentTasks: concurrentTasks ?? this.concurrentTasks,
     );
   }
 }
@@ -65,6 +71,7 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   static const _kA = 'out.audio';
   static const _kI = 'out.image';
   static const _kNotify = 'notify.enabled';
+  static const _kConcurrent = 'queue.concurrent';
 
   @override
   AppSettings build() {
@@ -75,6 +82,7 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
       audioTarget: p.getString(_kA) ?? AppSettings.targetApp,
       imageTarget: p.getString(_kI) ?? AppSettings.targetApp,
       notificationsEnabled: p.getBool(_kNotify) ?? true,
+      concurrentTasks: p.getInt(_kConcurrent) ?? 1,
     );
   }
 
@@ -100,6 +108,12 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     await _persist();
   }
 
+  /// 设置并行任务数（1~8）。
+  Future<void> setConcurrentTasks(int n) async {
+    state = state.copyWith(concurrentTasks: n.clamp(1, 8));
+    await _persist();
+  }
+
   Future<void> _persist() async {
     final p = ref.read(sharedPrefsProvider);
     await p.setString(_kPicker, state.pickerMode);
@@ -107,5 +121,6 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     await p.setString(_kA, state.audioTarget);
     await p.setString(_kI, state.imageTarget);
     await p.setBool(_kNotify, state.notificationsEnabled);
+    await p.setInt(_kConcurrent, state.concurrentTasks);
   }
 }
