@@ -123,6 +123,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
         ),
         const SizedBox(height: 12),
+        _sectionTitle('性能'),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.speed_outlined),
+            title: const Text('并行任务数'),
+            subtitle: const Text('同时执行任务数；1=串行，数值越高越耗 CPU/内存，视频软编建议 1~2'),
+            trailing: DropdownButton<int>(
+              value: settings.concurrentTasks,
+              items: [
+                for (final n in const [1, 2, 3, 4])
+                  DropdownMenuItem(value: n, child: Text('$n')),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                ref
+                    .read(appSettingsProvider.notifier)
+                    .setConcurrentTasks(v);
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         _sectionTitle('读取文件方式'),
         Card(
           child: Padding(

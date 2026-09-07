@@ -197,11 +197,6 @@ class _HomeView extends StatelessWidget {
               onTap: () => onConvert(kind),
             ),
           ),
-        Text(
-          '提示：批量任务会逐个串行转换，可随时取消。转码为 GPL 开源项目 FFmpeg 驱动。',
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.outline),
-        ),
         const SizedBox(height: 12),
         Card(
           clipBehavior: Clip.antiAlias,

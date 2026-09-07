@@ -19,18 +19,25 @@ import 'history_notifier.dart';
 ///
 /// 职责：
 ///   1. 维护全部任务列表（state）
-///   2. 串行执行（同时只转一个，避免把手机 CPU/内存打满）
+///   2. 按"设置里的并行任务数"同时执行多个任务（默认串行 1）
 ///   3. 把 FFmpeg 的进度统计换算成 0~1 的 progress 写回任务
-///   4. 支持取消当前任务 / 清空队列 / 失败重试
+///   4. 支持取消任务 / 清空队列 / 失败重试
 final taskQueueProvider =
     NotifierProvider<TaskQueue, List<ConvertTask>>(TaskQueue.new);
 
 class TaskQueue extends Notifier<List<ConvertTask>> {
-  /// 是否正在转码（串行锁）。
-  bool _running = false;
+  /// 正在运行的任务数（不应超过并行上限）。
+  int _active = 0;
 
-  /// 当前正在执行的 FFmpeg 会话（用于取消）。
-  FFmpegSession? _activeSession;
+  /// 各运行中 FFmpeg 任务对应的会话（用于逐个取消）。
+  final Map<String, FFmpegSession> _sessions = {};
+
+  /// 已请求取消、但原生通道不支持中途取消的脱壳任务 id（完成时按取消处理）。
+  final Set<String> _cancelRequested = {};
+
+  /// 当前允许并行的任务数（来自设置）。
+  int get _maxConcurrent =>
+      ref.read(appSettingsProvider).concurrentTasks.clamp(1, 8);
 
   /// 通知进度节流：记录上次通知的整百分比。
   int _lastNotifiedPct = -1;
@@ -64,13 +71,14 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
     _pump();
   }
 
-  /// 串行调度：若没在转码，就取第一个"排队中"的任务开跑。
+  /// 调度：只要还有空闲"并行槽位"，就依次启动排队中的任务。
   void _pump() {
-    if (_running) return;
-    final i = state.indexWhere((t) => t.status == TaskStatus.queued);
-    if (i < 0) return;
-    _running = true;
-    _run(state[i]);
+    while (_active < _maxConcurrent) {
+      final i = state.indexWhere((t) => t.status == TaskStatus.queued);
+      if (i < 0) break;
+      _active++;
+      _run(state[i]);
+    }
   }
 
   Future<void> _run(ConvertTask task) async {
@@ -128,7 +136,7 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
           }
         },
       );
-      _activeSession = session;
+      _sessions[task.id] = session;
     } catch (e) {
       _finish(task, message: '启动 FFmpeg 失败：$e');
     }
@@ -146,6 +154,11 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
       // 把输出路径更新为解密后的真实文件，再与转换流程一致地收尾（含通知/历史/SAF复制）
       final done = task.copyWith(outputPath: r.path, progress: 1.0);
       _patch(done.id, (_) => done);
+      // 若在脱壳过程中用户请求取消（原生不支持中途停），按"已取消"收尾
+      if (_cancelRequested.remove(task.id)) {
+        _finish(task, canceled: true);
+        return;
+      }
       if (_notifyEnabled) {
         unawaited(_notify(done, 1.0));
       }
@@ -222,8 +235,9 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
     bool canceled = false,
     String? message,
   }) {
-    _activeSession = null;
-    _running = false;
+    _active = _active > 0 ? _active - 1 : 0;
+    _sessions.remove(task.id);
+    _cancelRequested.remove(task.id);
 
     final status =
         canceled ? TaskStatus.canceled : (succeeded ? TaskStatus.succeeded : TaskStatus.failed);
@@ -271,7 +285,8 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
 
   // ---------- 供界面调用的操作 ----------
 
-  /// 取消一个任务：正在转码的立刻中断，排队的直接标记取消。
+  /// 取消一个任务：正在转码的立刻中断，排队的直接标记取消；
+  /// 运行中的脱壳任务（原生不支持中途停）在完成后按已取消收尾。
   Future<void> cancel(String id) async {
     final task = state.where((t) => t.id == id).firstOrNull;
     if (task == null) return;
@@ -280,8 +295,12 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
       return;
     }
     if (task.status == TaskStatus.running) {
-      await _activeSession?.cancel();
-      // 完成回调会走到 _finish(canceled: true)，这里不用再处理
+      final session = _sessions[id];
+      if (session != null) {
+        await session.cancel(); // FFmpeg 完成后会走到 _finish(canceled: true)
+      } else {
+        _cancelRequested.add(id); // 脱壳任务：完成后转"已取消"
+      }
     }
   }
 
@@ -292,7 +311,16 @@ class TaskQueue extends Notifier<List<ConvertTask>> {
         _patch(t.id, (x) => x.copyWith(status: TaskStatus.canceled));
       }
     }
-    await _activeSession?.cancel();
+    for (final e in _sessions.entries) {
+      await e.value.cancel();
+    }
+    for (final t in state) {
+      if (t.status == TaskStatus.running &&
+          t.unlockFormat != null &&
+          !_sessions.containsKey(t.id)) {
+        _cancelRequested.add(t.id);
+      }
+    }
   }
 
   /// 失败/取消的任务重试（重新排队，清空错误）。
