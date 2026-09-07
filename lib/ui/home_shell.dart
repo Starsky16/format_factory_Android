@@ -56,8 +56,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         title: Text(switch (_index) {
           0 => '格式工厂',
           1 => '转换任务',
-          2 => '设置',
-          _ => '转码历史',
+          2 => '转码历史',
+          _ => '设置',
         }),
         actions: _index == 1
             ? [
@@ -68,7 +68,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   label: const Text('清空已完成'),
                 ),
               ]
-            : _index == 3
+            : _index == 2
                 ? [
                     TextButton.icon(
                       onPressed: () => ref
@@ -85,8 +85,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         children: [
           _HomeView(onConvert: _openConvert, onOpenUnlock: _openUnlock),
           const TasksPage(),
-          const SettingsPage(),
           const HistoryPage(),
+          const SettingsPage(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -112,14 +112,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             label: '任务',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: '设置',
-          ),
-          const NavigationDestination(
             icon: Icon(Icons.history_outlined),
             selectedIcon: Icon(Icons.history),
             label: '历史',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: '设置',
           ),
         ],
       ),
@@ -214,7 +214,7 @@ class _HomeView extends StatelessWidget {
             ),
             title: const Text('音乐脱壳',
                 style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text('网易云 .ncm 等加密音乐还原为原始 flac/mp3（不转码）'),
+            subtitle: const Text('网易云 .ncm、QQ .qmc/.mflac/.mgg、酷狗 .kgm/.kgma/.vpr 加密音乐还原为原始格式（不转码）'),
             trailing: const Icon(Icons.chevron_right),
             onTap: onOpenUnlock,
           ),
