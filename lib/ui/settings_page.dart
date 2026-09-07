@@ -170,7 +170,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 8),
           _permissionCard(),
         ],
+        const SizedBox(height: 16),
+        _sectionTitle('关于'),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.gavel_outlined),
+            title: const Text('开源许可与致谢'),
+            subtitle: const Text('本项目使用到的开源库与算法参考'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _showAboutLicense,
+          ),
+        ),
       ],
+    );
+  }
+
+  /// 弹窗展示：本项目许可证 + 使用的开源库 + 脱壳算法参考。
+  void _showAboutLicense() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('开源许可与致谢'),
+        content: SingleChildScrollView(
+          child: const Text('''本项目以 GPL-3.0 开源（仓库见 README）。
+
+使用的开源组件：
+· Flutter / Dart
+· FFmpeg（内置 full-gpl 版，含 x264/x265 等）
+· ffmpeg_kit_flutter_new（FFmpegKit 活跃维护 fork）
+· flutter_riverpod / file_picker / share_plus
+· sqflite / path_provider / permission_handler
+· flutter_foreground_task（后台转码保活）
+
+脱壳算法参考（均 MIT）：
+· taurusxin/ncmdump（网易云 .ncm）
+· LingBrian/ncm2mp3-js（QQ 音乐 .qmc/.mflac）
+· onavcn/kugou-audio-unlock（酷狗 .kgm/.kgma/.vpr）
+
+说明：音乐脱壳仅建议用于本人拥有合法使用权的本地文件。'''),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
     );
   }
 
