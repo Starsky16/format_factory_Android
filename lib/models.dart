@@ -86,6 +86,7 @@ class ConvertTask {
     required this.outputPath,
     required this.createdAt,
     this.unlockFormat,
+    this.mergeAudioPath,
     this.copyTreeUri,
     this.inputDurationSeconds,
     this.status = TaskStatus.queued,
@@ -98,6 +99,10 @@ class ConvertTask {
 
   /// 若非空 = "脱壳"任务（如 'ncm'），不走 FFmpeg 而是调用原生解密通道。
   final String? unlockFormat;
+
+  /// 若非空 = 该任务要把两路流合成一个文件（B站缓存的 video.m4s + audio.m4s）：
+  /// 值为第二路（音频流）路径，主输入见 [inputPath]。
+  final String? mergeAudioPath;
   final String inputPath; // 源文件路径
   final String inputName; // 源文件名（展示用）
   final String presetId; // 目标格式 id（见 formats_data.dart）
@@ -126,6 +131,7 @@ class ConvertTask {
     String? error,
     bool clearError = false,
     String? outputPath,
+    String? mergeAudioPath,
   }) {
     return ConvertTask(
       id: id,
@@ -138,6 +144,7 @@ class ConvertTask {
       outputPath: outputPath ?? this.outputPath,
       createdAt: createdAt,
       unlockFormat: unlockFormat,
+      mergeAudioPath: mergeAudioPath ?? this.mergeAudioPath,
       copyTreeUri: copyTreeUri,
       inputDurationSeconds: inputDurationSeconds,
       status: status ?? this.status,
