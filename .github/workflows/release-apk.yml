@@ -14,6 +14,9 @@ jobs:
   build:
     name: Build split APKs & create release
     runs-on: ubuntu-latest
+    env:
+      # 未配置签名 secrets 时为空字符串 → 还原步骤自动跳过，退回 debug 签名
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +27,33 @@ jobs:
 
       - name: Resolve dependencies
         run: flutter pub get
+
+      - name: Restore release keystore (skipped when secrets are absent)
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+          } > key.properties
+          echo "已写入 android/key.properties（keystore: $RUNNER_TEMP/release.jks）"
+
+      - name: Show which signing is used
+        working-directory: android
+        run: |
+          if [ -f key.properties ]; then
+            echo "签名方式：正式 keystore（来自 secrets）"
+          else
+            echo "签名方式：debug（未配置 ANDROID_KEYSTORE_BASE64 secrets）"
+          fi
 
       - name: Build release APKs
         run: flutter build apk --release --split-per-abi

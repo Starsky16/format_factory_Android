@@ -71,3 +71,11 @@ android/tools/ref/kgm-py/
 # gradle/flutter 本地日志
 ut_*.txt
 unit_test_log*.txt
+
+# 本地环境与密钥（2026-09-13 补充；android/.gitignore 已覆盖 android/ 下的同名文件）
+local.properties
+.env
+.env.*
+*.jks
+*.keystore
+key.properties

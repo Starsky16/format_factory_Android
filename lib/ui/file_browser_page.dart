@@ -8,18 +8,34 @@ import 'picked_media.dart';
 /// "文件管理权限"读取方式下的自建文件浏览器。
 /// 允许在目录间跳转、多选支持格式的文件，确定后把选中文件的路径 pop 回上一页。
 class FileBrowserPage extends StatefulWidget {
-  const FileBrowserPage({super.key, required this.extensions});
+  const FileBrowserPage({
+    super.key,
+    required this.extensions,
+    this.pickDirectory = false,
+    this.initialPath,
+    this.title,
+  });
 
   /// 允许选择的扩展名（小写，不带点）。
   final List<String> extensions;
+
+  /// 选目录模式：只列目录，底部按钮把「当前目录路径」pop 回上一页。
+  /// （B站缓存这类需要"整个目录"的入口用它。）
+  final bool pickDirectory;
+
+  /// 打开时直接进入的目录（选目录模式常用）。
+  final String? initialPath;
+
+  /// 自定义标题（选目录模式常用，如"选择 B站缓存目录"）。
+  final String? title;
 
   @override
   State<FileBrowserPage> createState() => _FileBrowserPageState();
 }
 
 class _FileBrowserPageState extends State<FileBrowserPage> {
-  /// 打开时直接进入主存储（照片/下载/Music 通常都在这里）
-  Directory _current = Directory('/storage/emulated/0');
+  /// 当前目录（打开时会在 initState 里按 initialPath 定位）
+  late Directory _current;
   final List<String> _stack = [];
   final Set<String> _selected = {};
 
@@ -51,6 +67,8 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
   @override
   void initState() {
     super.initState();
+    // 默认进主存储（照片/下载/Music 都在这里）；给了 initialPath 就直接进去
+    _current = Directory(widget.initialPath ?? '/storage/emulated/0');
     _loadBookmarks();
   }
 
@@ -98,7 +116,22 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
       setState(() => _current = Directory('/storage'));
       return;
     }
+    if (_stack.isEmpty) {
+      // 用 initialPath 直接打开时没有历史栈：退回主存储，避免崩溃
+      setState(() => _current = Directory('/storage/emulated/0'));
+      return;
+    }
     setState(() => _current = Directory(_stack.removeLast()));
+  }
+
+  /// 当前目录的短标签，用于"选择此目录"按钮。
+  String get _currentLabel {
+    if (_atStorageRoot) return '分区列表';
+    if (_atPrimary) return '主存储';
+    final parts =
+        _current.path.split('/').where((e) => e.isNotEmpty).toList();
+    if (parts.length >= 2) return '${parts[parts.length - 2]}/${parts.last}';
+    return _current.path;
   }
 
   bool _match(String name) {
@@ -167,9 +200,10 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
               title: Text(
                 _atStorageRoot
                     ? '选择分区'
-                    : _atPrimary
-                        ? '主存储 (emulated/0)'
-                        : _current.path.split('/').last,
+                    : widget.title ??
+                        (_atPrimary
+                            ? '主存储 (emulated/0)'
+                            : _current.path.split('/').last),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -180,11 +214,13 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
                       onPressed: _goUp,
                     ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: '搜索文件',
-                  onPressed: _startSearch,
-                ),
+                // 选目录模式不需要搜索文件
+                if (!widget.pickDirectory)
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    tooltip: '搜索文件',
+                    onPressed: _startSearch,
+                  ),
                 IconButton(
                   icon: Icon(
                     _bookmarks.contains(_current.path)
@@ -219,34 +255,55 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
                 return _fileList(theme, snap.data ?? const []);
               },
             ),
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: _bottomBar(),
+    );
+  }
+
+  /// 底部操作条：
+  ///  - 选目录模式：返回「当前目录」
+  ///  - 选文件模式：全选 / 清除 / 确定添加
+  Widget _bottomBar() {
+    if (widget.pickDirectory) {
+      return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
-            children: [
-              TextButton.icon(
-                onPressed:
-                    (_atStorageRoot && !_searching) ? null : _selectAllVisible,
-                icon: const Icon(Icons.select_all, size: 18),
-                label: const Text('全选'),
-              ),
-              TextButton.icon(
-                onPressed: _selected.isEmpty ? null : _clearSelection,
-                icon: const Icon(Icons.deselect, size: 18),
-                label: const Text('清除'),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _selected.isEmpty
-                      ? null
-                      : () => Navigator.of(context).pop(_selected.toList()),
-                  icon: const Icon(Icons.check),
-                  label: Text('确定添加 (${_selected.length})'),
-                ),
-              ),
-            ],
+          child: FilledButton.icon(
+            onPressed: _atStorageRoot
+                ? null
+                : () => Navigator.of(context).pop(<String>[_current.path]),
+            icon: const Icon(Icons.check),
+            label: Text('选择此目录 · $_currentLabel'),
           ),
+        ),
+      );
+    }
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          children: [
+            TextButton.icon(
+              onPressed:
+                  (_atStorageRoot && !_searching) ? null : _selectAllVisible,
+              icon: const Icon(Icons.select_all, size: 18),
+              label: const Text('全选'),
+            ),
+            TextButton.icon(
+              onPressed: _selected.isEmpty ? null : _clearSelection,
+              icon: const Icon(Icons.deselect, size: 18),
+              label: const Text('清除'),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _selected.isEmpty
+                    ? null
+                    : () => Navigator.of(context).pop(_selected.toList()),
+                icon: const Icon(Icons.check),
+                label: Text('确定添加 (${_selected.length})'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -297,7 +354,8 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
     final files = <File>[];
     for (final e in entries) {
       if (e is Directory) dirs.add(e);
-      if (e is File && _match(e.path)) files.add(e);
+      // 选目录模式只列目录：B站缓存里的 m4s/json 没有单独选择的意义
+      if (!widget.pickDirectory && e is File && _match(e.path)) files.add(e);
     }
     dirs.sort((a, b) => a.path.compareTo(b.path));
     files.sort((a, b) => a.path.compareTo(b.path));
@@ -336,9 +394,13 @@ class _FileBrowserPageState extends State<FileBrowserPage> {
             onTap: () => _toggle(f.path),
           ),
         if (dirs.isEmpty && files.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: Text('此目录没有可转换的文件')),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: Text(widget.pickDirectory
+                  ? '此目录没有子目录：可直接用下方按钮选择当前目录'
+                  : '此目录没有可转换的文件'),
+            ),
           ),
       ],
     );

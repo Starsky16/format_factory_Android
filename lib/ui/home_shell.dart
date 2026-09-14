@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 import '../state/history_notifier.dart';
 import '../state/task_queue.dart';
+import 'bili_page.dart';
 import 'convert_flow.dart';
 import 'history_page.dart';
 import 'settings_page.dart';
@@ -45,6 +46,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
+  /// B站缓存转视频：把缓存的 video.m4s + audio.m4s 合并成普通 MP4。
+  Future<void> _openBili() async {
+    final added = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => const BiliPage()),
+    );
+    if (added == null || added <= 0 || !mounted) return;
+    setState(() => _index = 1);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已把 $added 个缓存视频加入队列')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pending = ref
@@ -83,7 +96,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       body: IndexedStack(
         index: _index,
         children: [
-          _HomeView(onConvert: _openConvert, onOpenUnlock: _openUnlock),
+          _HomeView(
+            onConvert: _openConvert,
+            onOpenUnlock: _openUnlock,
+            onOpenBili: _openBili,
+          ),
           const TasksPage(),
           const HistoryPage(),
           const SettingsPage(),
@@ -129,10 +146,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
 /// 首页：三个媒体类别入口 + 简短说明。
 class _HomeView extends StatelessWidget {
-  const _HomeView({required this.onConvert, required this.onOpenUnlock});
+  const _HomeView({
+    required this.onConvert,
+    required this.onOpenUnlock,
+    required this.onOpenBili,
+  });
 
   final void Function(MediaKind kind) onConvert;
   final VoidCallback onOpenUnlock;
+  final VoidCallback onOpenBili;
 
   static const _colors = <Color>[
     Color(0xFF3F51B5), // 视频 靛蓝
@@ -212,6 +234,26 @@ class _HomeView extends StatelessWidget {
             subtitle: const Text('网易云 .ncm、QQ .qmc/.mflac/.mgg、酷狗 .kgm/.kgma/.vpr 加密音乐还原为原始格式（不转码）'),
             trailing: const Icon(Icons.chevron_right),
             onTap: onOpenUnlock,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            leading: const CircleAvatar(
+              radius: 22,
+              backgroundColor: Color(0x33FB7299),
+              child: Icon(Icons.video_collection_outlined,
+                  color: Color(0xFFD4688A)),
+            ),
+            title: const Text('B站缓存转视频',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('把客户端缓存下来的 video.m4s + audio.m4s '
+                '无损合并成普通 MP4（不转码），可直接分享或用任意播放器打开'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onOpenBili,
           ),
         ),
       ],
