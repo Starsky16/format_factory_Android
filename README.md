@@ -92,53 +92,11 @@ B 站缓存放在 `Android/data/tv.danmaku.bili/download`（部分版本为 `And
 - B站缓存转视频同样只做**本地封装合并**：不联网、不下载视频、不破解任何会员/加密内容，请仅用于导出你本人缓存下来、有权使用的视频。
 
 ---
-## 🛠 开发者 / 贡献者专区
+## 🛠 开发者 / 贡献者
 
-> 以下内容面向想参与开发的人，普通用户无需阅读。
+想参与开发、自己构建或了解内部结构，请看 **[CONTRIBUTING.md](CONTRIBUTING.md)**（分支约定、开发环境与验证命令、项目结构、怎么加一种转码格式、提交信息风格）；安全问题请按 [SECURITY.md](SECURITY.md) 处理。
 
-**技术栈**：Flutter 3.x · Material 3 · Riverpod · FFmpeg（`ffmpeg_kit_flutter_new`）· SQLite
-**要求**：minSdk 24 / targetSdk 36
-
-**项目结构（都很短）**
-```
-lib/
-├── models.dart             领域模型（任务/设置/媒体信息）
-├── formats.dart            格式预设结构与参数翻译助手
-├── formats_data.dart       汇总入口
-├── formats_video_data.dart 视频格式清单（想加视频格式改这里）
-├── formats_audio_data.dart 音频格式清单
-├── formats_image_data.dart 图片格式清单
-├── services/               FFmpeg 引擎、FFprobe、输出目录、解锁通道、B站缓存解析、前台通知
-├── state/                  Riverpod：任务队列 / 设置 / 历史
-└── ui/                     首页 / 转换 / 音乐脱壳 / B站缓存 / 任务 / 历史 / 设置 / 文件浏览器
-
-android/app/src/main/kotlin/.../unlock/   脱壳算法（Ncm/Qmc/Kgm，纯 Kotlin）
-android/app/src/test/.../unlock/          JVM 单元测试（含真实 .ncm 样本与往返样本）
-```
-
-**从源码构建与发布**
-```bash
-flutter pub get
-flutter analyze
-flutter test
-flutter build apk --release --split-per-abi
-# 涉及脱壳算法改动另跑：
-cd android && ./gradlew :app:testDebugUnitTest
-# 打 tag 后 CI 会自动出 Release：git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z
-```
-
-**想加一种转码格式？**
-打开 `lib/formats_video_data.dart`（或 audio/image），复制一条 `FormatPreset` 改三处：
-`name/extension`（显示名与扩展名）、`fields`（设置页参数下拉框）、`buildArgs`（FFmpeg 参数，均有中文注释）。
-
-**想换主题色？**
-改 `lib/theme.dart` 里的 `seedColor` 一个值，整套 Material 3 配色自动生成。
-
-**分支与协作约定**
-- `main`：只存放已验证通过的代码
-- `dev`：日常开发分支
-- 合并到 `main` 前必须通过：`flutter analyze`、`flutter test`、release 构建（涉及原生另跑 Kotlin 单测）
-- 详见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [SECURITY.md](SECURITY.md)
+**技术栈**：Flutter 3.x · Material 3 · Riverpod · FFmpeg（`ffmpeg_kit_flutter_new`）· SQLite ｜ minSdk 24 / targetSdk 36
 
 **致谢**
 [FFmpeg](https://ffmpeg.org/) · [ffmpeg_kit_flutter_new](https://pub.dev/packages/ffmpeg_kit_flutter_new) · [Flutter](https://flutter.dev/) · 脱壳算法参考 [ncmdump](https://github.com/taurusxin/ncmdump) / [ncm2mp3-js](https://github.com/LingBrian/ncm2mp3-js) / [kugou-audio-unlock](https://github.com/onavcn/kugou-audio-unlock)（MIT）
